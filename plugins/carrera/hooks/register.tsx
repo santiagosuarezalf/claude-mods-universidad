@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderChildren } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { Beca, Bloque, Contexto, Entrega } from '../types'
 import { beca, clasificar, contexto, fechaLocal, leerEventos, punteros, recortar, restante, usarZona } from './logica'
@@ -191,67 +191,46 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Pie, junto al modo (como sub-meter): rota cada 8 s entre la próxima entrega, el semestre y el promedio.
-  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+  // Pie, en la línea de pistas bajo el prompt (junto a «plan mode on»): rota cada 8 s entre la
+  // próxima entrega, el semestre y el promedio. No va en SessionMode porque sub-meter dibuja ahí y
+  // no le pasa el turno a otros mods cuando no hay etiquetas de modo.
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     await read($, tick)
     const ahora = await $.clock.now()
     const prox = (await read($, entregas)).find(x => x.cierra > ahora)
     const c = await read($, ctx)
     const n = await read($, semana)
     const b = await read($, notas)
-    const { Box, Text } = $.ui.resolve(e)
     const ancho = Math.max(14, Math.min(34, Math.floor((e.viewport?.columns ?? 100) / 4)))
 
-    const piezas: RenderChildren[] = []
+    const piezas: string[] = []
     if (!prox && !(await read($, cargado))) {
       // Mientras llega la primera lectura del calendario, el pie no queda vacío.
-      piezas.push(<Text dimColor>📌 cargando calendario…</Text>)
+      piezas.push('📌 cargando calendario…')
     }
     if (prox) {
-      const falta = prox.cierra - ahora
-      piezas.push(
-        <Text>
-          <Text dimColor>📌 </Text>
-          <Text>{recortar(prox.titulo, ancho)}</Text>
-          <Text color={colorPorHoras(falta / HORA)}> · {restante(falta)}</Text>
-        </Text>,
-      )
+      const alerta = colorPorHoras((prox.cierra - ahora) / HORA) === 'error' ? '🔴 ' : ''
+      piezas.push(`📌 ${alerta}${recortar(prox.titulo, ancho)} · ${restante(prox.cierra - ahora)}`)
     }
     if (c) {
       const corteMal = c.esperado !== null && c.esperado !== c.corte
       const diasFin = c.finClases === null ? null : Math.ceil((c.finClases - ahora) / (24 * HORA))
       const sem = c.semestre.replace(/ SEMESTER$/i, '').replace(/^(\d+)(st|nd|rd|th)$/i, '$1º')
       piezas.push(
-        <Text>
-          <Text dimColor>🗓️ {sem} sem · </Text>
-          <Text color={corteMal ? 'error' : undefined}>{c.corte}</Text>
-          {n !== null ? <Text dimColor> · semana {n}{c.semanas ? `/${c.semanas}` : ''}</Text> : null}
-          {diasFin !== null && diasFin >= 0 ? <Text dimColor> · fin en {diasFin} d</Text> : null}
-        </Text>,
+        `🗓️ ${sem} sem · ${corteMal ? '⚠️ ' : ''}${c.corte}` +
+        (n !== null ? ` · semana ${n}${c.semanas ? `/${c.semanas}` : ''}` : '') +
+        (diasFin !== null && diasFin >= 0 ? ` · fin en ${diasFin} d` : ''),
       )
     }
     if (b !== null && b.promedio !== null) {
-      piezas.push(
-        <Text>
-          <Text dimColor>🎓 </Text>
-          <Text color={b.promedio >= meta ? 'success' : 'warning'}>
-            {b.aproximado ? '≈' : ''}{b.promedio.toFixed(2).replace('.', ',')}
-          </Text>
-          <Text dimColor> / {String(meta).replace('.', ',')} · {b.materias}/{b.total} materias</Text>
-        </Text>,
-      )
+      const prom = `${b.aproximado ? '≈' : ''}${b.promedio.toFixed(2).replace('.', ',')}`
+      piezas.push(`🎓 ${prom} / ${String(meta).replace('.', ',')} · ${b.materias}/${b.total} materias`)
     }
     if (piezas.length === 0) return next(e)
 
-    const labels = e.props.modes.length > 0 ? await next(e) : null
     const actual = piezas[(await read($, vista)) % piezas.length]
-    return (
-      <Box flexDirection="row">
-        {labels}
-        {labels ? <Text dimColor> · </Text> : null}
-        {actual}
-      </Box>
-    )
+    const tail = e.props.tail ? `${e.props.tail} · ${actual}` : ` ${actual}`
+    return next({ ...e, props: { ...e.props, tail } })
   })
 
   // Sobre el prompt, solo cuando hace falta: el corte desactualizado o un bloque ✍️ en curso.
