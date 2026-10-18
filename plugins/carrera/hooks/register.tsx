@@ -28,6 +28,8 @@ const ESPERA_INICIAL_MS = 5000
  * («⏸ plan mode on · », 17) y sub-meter a la derecha (con «week», ~32), más holgura.
  */
 const RESERVA = 60
+/** Columnas que necesita la pieza del pie para leerse junto a la pista del engine; con menos, baja un renglón. */
+const MIN_PIEZA = 40
 const HORA = 3600_000
 /**
  * Ventanas («🪟 Abre:» en la descripción) que se muestran a la vez sobre el prompt; las demás se cuentan.
@@ -236,6 +238,7 @@ export const register: Register = (on, options) => {
 
   // En el pie, en la misma línea de «plan mode on»: rota cada 5 s entre próxima entrega, semestre y promedio.
   // Ocupa siempre el mismo ancho, así sub-meter (a la derecha) no se corre ni salta de renglón.
+  // Si los letreros del engine no le dejan sitio en esa línea, la pieza baja a un renglón propio.
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     await read($, tick)
     const ahora = await $.clock.now()
@@ -306,6 +309,17 @@ export const register: Register = (on, options) => {
       : <Text dimColor>📌 cargando…</Text>
     // La pista del engine (p. ej. «esc to interrupt») se conserva delante, si la hay.
     const conPista = e.props.hint.replace(/·/g, '').trim() !== ''
+    // Con letreros largos (« · » incluido) no quedaría sitio: la pista entera arriba y la pieza debajo.
+    if (conPista && e.props.hint.trim().length + 3 + MIN_PIEZA > columnas) {
+      return (
+        <Box flexDirection="column">
+          <Box flexShrink={0}>{linea}</Box>
+          <Box width={columnas}>
+            <Text wrap="truncate-end">{pieza}</Text>
+          </Box>
+        </Box>
+      )
+    }
     return (
       <Box flexDirection="row" width={columnas}>
         {conPista ? <Box flexShrink={0}>{linea}</Box> : null}

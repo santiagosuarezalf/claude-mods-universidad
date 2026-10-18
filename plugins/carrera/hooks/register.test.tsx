@@ -92,6 +92,19 @@ test('si hay una pista del engine, la conserva delante', async ($, on) => {
   expect(await texto(ui)).toContain('esc to interrupt')
 })
 
+test('con letreros largos del engine, la pieza baja a un renglón propio y no se esconde', async ($, on) => {
+  const m = mundo(on)
+  await abrir($)
+  await m.clock.advance(100)
+  const letreros = 'esc to interrupt · ctrl+t to hide tasks · Update available! Run: claude update · Context left until auto-compact: 9%'
+  const ui = await pie($, letreros)
+  const raiz = await ui.drawn() as unknown as { props: { flexDirection?: string } }
+  expect(raiz.props.flexDirection).toBe('column')
+  const t = await texto(ui)
+  expect(t).toContain(letreros)
+  expect(['📌', '🗓️', '🎓', '🎯'].some(x => t.includes(x))).toBe(true)
+})
+
 test('en la banda sobre el prompt, lo de otros mods va encima del bloque ✍️', async ($, on) => {
   const m = mundo(on)
   await abrir($)
