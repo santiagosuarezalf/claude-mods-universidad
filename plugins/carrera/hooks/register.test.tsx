@@ -9,6 +9,7 @@ const CLAUDE_RAIZ = '> **SEMESTRE ACTIVO: `2nd SEMESTER`**\n> **CORTE ACTIVO: `C
 const CLAUDE_SEMESTRE = '16 semanas de clase\n| CORTE I | 28 jul – 5 sep |\n| CORTE II | 7 sep – 24 oct |\n| CORTE III | 26 oct – 21 nov |\n'
 const NOTAS = '| Materia | Créditos | Corte I (/30) | Corte II (/30) | Corte III (/40) |\n|---|---|---|---|---|\n| DPOO | | | 27 | |\n'
 const EVENTOS = [
+  { summary: '✍️ Hacer: ajedrez funcional', start: { dateTime: '2026-10-18T13:00:00-05:00' }, end: { dateTime: '2026-10-18T18:00:00-05:00' } },
   { summary: 'Semana 11', start: { date: '2026-10-12T00:00:00Z' }, end: { date: '2026-10-19T00:00:00Z' }, transparency: 'transparent' },
   { summary: 'Entrega proyecto ajedrez', start: { date: '2026-10-19T00:00:00Z' }, end: { date: '2026-10-20T00:00:00Z' } },
 ]
@@ -88,4 +89,21 @@ test('si hay una pista del engine, la conserva delante', async ($, on) => {
   await abrir($)
   const ui = await pie($, 'esc to interrupt')
   expect(await texto(ui)).toContain('esc to interrupt')
+})
+
+test('en la banda sobre el prompt, lo de otros mods va encima del bloque ✍️', async ($, on) => {
+  const m = mundo(on)
+  await abrir($)
+  await m.clock.advance(100)
+  const ui = await $.ui.mount({
+    plugin: 'carrera',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, bodyColumns: 150 } as never,
+    viewport: { columns: 160, rows: 40 },
+  })
+  const raiz = await ui.find({ type: 'Box' })
+  const hijos = (raiz?.children ?? []) as { type?: string; props?: { key?: string } }[]
+  expect(hijos[0]?.props?.key).toBe('engine')
+  expect(raiz?.text).toContain('✍️ ajedrez funcional')
 })

@@ -278,7 +278,8 @@ export const register: Register = (on, options) => {
   })
 
   // Sobre el prompt, solo cuando hace falta: el corte desactualizado o un bloque ✍️ en curso.
-  // Lo que dibujan otros mods ahí (la fila de image-preview, por ejemplo) se deja pasar siempre.
+  // Lo que dibujan otros mods ahí (la English note de ingles, la fila de image-preview) va primero,
+  // encima de estos avisos: así el orden no depende de qué mod cargó antes.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     await read($, tick)
@@ -292,6 +293,7 @@ export const register: Register = (on, options) => {
     const { Box, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="column">
+        {otros}
         {corteMal && c
           ? <Text color="error">⚠️ Por fecha ya es {c.esperado}: falta actualizar CORTE ACTIVO en el CLAUDE.md raíz.</Text>
           : null}
@@ -303,7 +305,6 @@ export const register: Register = (on, options) => {
             </Text>
             )
           : null}
-        {otros}
       </Box>
     )
   })

@@ -5,15 +5,19 @@ Están pensados para una carpeta de carrera organizada por semestre, materia y c
 
 ## carrera
 
-- **📌 Próxima entrega en el pie**, junto al modo de permisos: `📌 Entrega proyecto · 1d 4h`.
-  Se pone amarillo cuando faltan menos de 48 h y rojo cuando faltan menos de 12.
-  Toma los eventos **de día completo** de tu calendario de Google y salta los que empiezan por ✅ o ❌,
-  así que marcar ✅ al entregar hace avanzar el contador.
-- **Banda sobre el prompt:** `2º sem · CORTE II · semana 11/16 · fin de clases en 34 d`.
-  Muestra una línea roja si el puntero de corte quedó desactualizado.
-- **🎓 Medidor de promedio** frente a tu meta, leído de `<SEMESTRE>/NOTAS.md`.
-- **✍️ Bloques de trabajo:** los eventos con hora que empiezan por ✍️ avisan al arrancar y muestran
-  cuánto queda.
+Un renglón en el pie, junto a la etiqueta del modo de permisos, que cambia cada 5 s entre:
+
+- **📌 Próxima entrega:** `📌 Próxima entrega: proyecto final · cierra en 1d 4h`. El tiempo se pone
+  amarillo cuando faltan menos de 48 h y rojo cuando faltan menos de 12. Toma los eventos **de día
+  completo** de tu calendario de Google y salta los que empiezan por ✅ o ❌, así que marcar ✅ al
+  entregar hace avanzar el contador.
+- **🗓️ Semestre:** `🗓️ 2º semestre · CORTE II · semana 11 de 16 · faltan 35 días`.
+- **🎓 Promedio** frente a tu meta, leído de `<SEMESTRE>/NOTAS.md`:
+  `🎓 Promedio aprox. 8,69 · meta de beca 9,3 (faltan 0,61) · calculado con 7 de 7 materias`.
+
+El renglón tiene ancho fijo para no empujar lo que haya a la derecha del pie. Sobre el prompt, solo
+cuando hace falta: una línea roja si el puntero de corte quedó desactualizado y **✍️ el bloque de
+trabajo en curso** (los eventos con hora que empiezan por ✍️ avisan al arrancar y muestran cuánto queda).
 
 Necesita el conector de **Google Calendar** de claude.ai conectado en Claude Code.
 
@@ -84,3 +88,6 @@ claude plugin test plugins/<mod>
 ```
 
 MIT
+
+> ¿Practicas inglés mientras trabajas? El mod de la English note vive aparte:
+> [claude-mod-english-note](https://github.com/santiagosuarezalf/claude-mod-english-note).

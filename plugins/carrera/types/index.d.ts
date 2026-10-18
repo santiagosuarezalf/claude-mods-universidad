@@ -19,6 +19,7 @@ declare module 'claude-code' {
       beca: Beca | null
       tick: number
       vista: number
+      cargado: boolean
     }
   }
 }

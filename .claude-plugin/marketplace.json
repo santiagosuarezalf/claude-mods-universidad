@@ -12,7 +12,7 @@
       "name": "carrera",
       "source": "./plugins/carrera",
       "description": "Próxima entrega en el pie, banda con corte/semana/promedio y temporizador de bloques ✍️, leyendo tu Google Calendar.",
-      "version": "0.2.9",
+      "version": "0.2.10",
       "category": "productivity"
     },
     {
