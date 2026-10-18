@@ -1,0 +1,91 @@
+// Pruebas del pie, contra el engine: `claude plugin test plugins/carrera`
+import { expect, mock, test } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
+import type { On } from 'claude-code'
+
+const AHORA = Date.parse('2026-10-18T15:00:00-05:00') // un domingo a las 3 p. m., UTC−5
+const RAIZ = '/carrera'
+const CLAUDE_RAIZ = '> **SEMESTRE ACTIVO: `2nd SEMESTER`**\n> **CORTE ACTIVO: `CORTE II`**\n'
+const CLAUDE_SEMESTRE = '16 semanas de clase\n| CORTE I | 28 jul – 5 sep |\n| CORTE II | 7 sep – 24 oct |\n| CORTE III | 26 oct – 21 nov |\n'
+const NOTAS = '| Materia | Créditos | Corte I (/30) | Corte II (/30) | Corte III (/40) |\n|---|---|---|---|---|\n| DPOO | | | 27 | |\n'
+const EVENTOS = [
+  { summary: 'Semana 11', start: { date: '2026-10-12T00:00:00Z' }, end: { date: '2026-10-19T00:00:00Z' }, transparency: 'transparent' },
+  { summary: 'Entrega proyecto ajedrez', start: { date: '2026-10-19T00:00:00Z' }, end: { date: '2026-10-20T00:00:00Z' } },
+]
+
+/** Lo que está debajo del mod: reloj, store con eventos guardados, archivos de la carrera y el engine. */
+function mundo (on: On) {
+  const clock = mock.clock(on, { now: AHORA })
+  const store: Record<string, unknown> = { eventos: EVENTOS }
+  on('store.get', ($, e) => ({ value: store[e.key] }))
+  on('store.set', ($, e) => {
+    store[e.key] = JSON.parse(JSON.stringify(e.value))
+    return { value: undefined }
+  })
+  on('fs.ancestors', () => ({ value: [{ dir: RAIZ, name: 'CLAUDE.md', content: CLAUDE_RAIZ }] }) as never)
+  on('fs.read', ($, e) => {
+    const archivos: Record<string, string> = {
+      [`${RAIZ}/2nd SEMESTER/CLAUDE.md`]: CLAUDE_SEMESTRE,
+      [`${RAIZ}/2nd SEMESTER/NOTAS.md`]: NOTAS,
+    }
+    const ruta = (e as { path: string }).path
+    return (ruta in archivos ? { value: archivos[ruta] } : { deny: 'no existe' }) as never
+  })
+  on('mcp.call', () => ({ value: { isError: true, content: [] } }) as never)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('ui.render', ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    return 'hint' in e.props ? <Text>{e.props.hint}</Text> : <Box key="engine" />
+  })
+  return { clock, store }
+}
+
+const abrir = ($: Engine) => $.session.start({ cwd: RAIZ, surface: 'terminal', isInteractive: true })
+// Un terminal de 160 columnas, más o menos el ancho de la pantalla de Santiago.
+const pie = ($: Engine, hint = '') =>
+  $.ui.mount({
+    plugin: 'carrera',
+    surface: 'terminal',
+    component: 'PromptHint',
+    props: { isDraft: false, isWorking: false, hint },
+    viewport: { columns: 160, rows: 40 },
+  })
+
+/** El texto plano de todo lo que dibujó el pie. */
+async function texto (ui: Awaited<ReturnType<typeof pie>>) {
+  return (await ui.find({ type: 'Box' }))?.text ?? ''
+}
+
+test('el pie muestra una cosa a la vez y rota cada 5 s', async ($, on) => {
+  const m = mundo(on)
+  await abrir($)
+  await m.clock.advance(100)
+  const vistos: string[] = []
+  for (let i = 0; i < 3; i++) {
+    const ui = await pie($)
+    vistos.push(await texto(ui))
+    await ui.unmount()
+    await m.clock.advance(5000)
+  }
+  expect(vistos.some(t => t.includes('📌') && t.includes('Próxima entrega: proyecto ajedrez · cierra en'))).toBe(true)
+  expect(vistos.some(t => t.endsWith('🗓️ 2º semestre · CORTE II · semana 11 de 16 · faltan 35 días'))).toBe(true)
+  expect(vistos.some(t => t.includes('🎓 Promedio aprox. 9,00 · meta de beca 9,3 (faltan 0,30) · calculado con 1 de 1 materias'))).toBe(true)
+  // Una sola cosa por vez
+  for (const t of vistos) expect([t.includes('📌'), t.includes('🗓️'), t.includes('🎓')].filter(Boolean).length).toBe(1)
+})
+
+test('el pie ocupa un solo renglón y un ancho fijo', async ($, on) => {
+  mundo(on)
+  await abrir($)
+  const ui = await pie($)
+  const raiz = await ui.drawn() as unknown as { type: string; props: { flexDirection?: string; width?: number } }
+  expect(raiz.props.flexDirection).toBe('row')
+  expect(typeof raiz.props.width).toBe('number')
+})
+
+test('si hay una pista del engine, la conserva delante', async ($, on) => {
+  mundo(on)
+  await abrir($)
+  const ui = await pie($, 'esc to interrupt')
+  expect(await texto(ui)).toContain('esc to interrupt')
+})

@@ -10,13 +10,20 @@ const semana = atom({ plugin: 'carrera', key: 'semana' } as const, null as numbe
 const ctx = atom({ plugin: 'carrera', key: 'contexto' } as const, null as Contexto | null)
 const notas = atom({ plugin: 'carrera', key: 'beca' } as const, null as Beca | null)
 const tick = atom({ plugin: 'carrera', key: 'tick' } as const, 0)
+const vista = atom({ plugin: 'carrera', key: 'vista' } as const, 0)
 const cargado = atom({ plugin: 'carrera', key: 'cargado' } as const, false)
 
 const CALENDARIO = 'claude.ai Google Calendar'
 const CADA_CALENDARIO_MS = 10 * 60_000
 const CADA_MINUTO_MS = 60_000
+const ROTAR_MS = 5000
 const REINTENTO_MS = 60_000
 const ESPERA_INICIAL_MS = 5000
+/**
+ * Columnas del pie que no son del renglón de carrera: la etiqueta del modo a la izquierda
+ * («⏸ plan mode on · », 17) y sub-meter a la derecha (con «week», ~32), más holgura.
+ */
+const RESERVA = 60
 const HORA = 3600_000
 
 /** La carpeta raíz de la carrera: la del CLAUDE.md que tiene los punteros, de aquí hacia arriba. */
@@ -151,6 +158,7 @@ async function iniciar ($: EngineInterface) {
   $.clock.after(ESPERA_INICIAL_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
 
   $.clock.every(CADA_CALENDARIO_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
+  $.clock.every(ROTAR_MS, () => { void update($, vista, n => n + 1) })
   $.clock.every(CADA_MINUTO_MS, async () => {
     await update($, tick, n => n + 1)
     // Aviso cuando arranca un bloque ✍️ del calendario
@@ -164,6 +172,9 @@ async function iniciar ($: EngineInterface) {
     }
   })
 }
+
+/** 9.3 → «9,30»: con coma decimal, como se escriben las notas. */
+const coma = (x: number, decimales = 2) => x.toFixed(decimales).replace('.', ',')
 
 const colorPorHoras = (horas: number) => (horas <= 12 ? 'error' : horas <= 48 ? 'warning' : undefined)
 
@@ -188,48 +199,48 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Renglón propio sobre el prompt, siempre visible: próxima entrega · semestre · promedio, todo junto.
-  // Debajo, solo cuando hace falta: el corte desactualizado o un bloque ✍️ en curso.
-  // No va en el pie: sub-meter dibuja ahí y no le pasa el turno a otros mods.
-  // Lo que dibujan otros mods en esta banda (la fila de image-preview, por ejemplo) se deja pasar siempre.
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
+  // En el pie, en la misma línea de «plan mode on»: rota cada 5 s entre próxima entrega, semestre y promedio.
+  // Ocupa siempre el mismo ancho, así sub-meter (a la derecha) no se corre ni salta de renglón.
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     await read($, tick)
     const ahora = await $.clock.now()
     const prox = (await read($, entregas)).find(x => x.cierra > ahora)
     const c = await read($, ctx)
     const n = await read($, semana)
     const b = await read($, notas)
-    const corteMal = c !== null && c.esperado !== null && c.esperado !== c.corte
-    const enCurso = (await read($, bloques)).find(x => x.inicio <= ahora && ahora < x.fin)
     const yaCargo = await read($, cargado)
-    if (!prox && !c && b === null && !enCurso && yaCargo) return next(e)
 
-    const otros = await next(e)
+    const linea = await next(e)
     const { Box, Text } = $.ui.resolve(e)
-    const ancho = Math.max(20, Math.floor(e.props.bodyColumns / 3))
-    const sep = <Text dimColor>   ·   </Text>
+    // Ancho fijo: así lo de la derecha (sub-meter, avisos del engine) no se corre cuando cambia.
+    const columnas = Math.max(30, (e.viewport?.columns ?? 100) - RESERVA)
+    // Lo que queda para el título de la entrega, descontando «📌 Próxima entrega: » y « · cierra en 1d 7h»
+    const ancho = Math.max(16, columnas - 38)
 
     const entrega = prox
       ? (
         <Text>
-          <Text dimColor>📌 </Text>
-          <Text>{recortar(prox.titulo, ancho)}</Text>
-          <Text color={colorPorHoras((prox.cierra - ahora) / HORA)}> · {restante(prox.cierra - ahora)}</Text>
+          <Text dimColor>📌 Próxima entrega: </Text>
+          <Text>{recortar(prox.titulo.replace(/^entrega\s+(de\s+)?/i, ''), ancho)}</Text>
+          <Text dimColor> · cierra en </Text>
+          <Text color={colorPorHoras((prox.cierra - ahora) / HORA)}>{restante(prox.cierra - ahora)}</Text>
         </Text>
         )
       : yaCargo ? null : <Text dimColor>📌 cargando calendario…</Text>
 
     let semestre = null
     if (c) {
+      const corteMal = c.esperado !== null && c.esperado !== c.corte
       const diasFin = c.finClases === null ? null : Math.ceil((c.finClases - ahora) / (24 * HORA))
       const sem = c.semestre.replace(/ SEMESTER$/i, '').replace(/^(\d+)(st|nd|rd|th)$/i, '$1º')
       semestre = (
         <Text>
-          <Text dimColor>🗓️ {sem} sem · </Text>
+          <Text dimColor>🗓️ {sem} semestre · </Text>
           <Text color={corteMal ? 'error' : undefined}>{c.corte}</Text>
-          {n !== null ? <Text dimColor> · semana {n}{c.semanas ? `/${c.semanas}` : ''}</Text> : null}
-          {diasFin !== null && diasFin >= 0 ? <Text dimColor> · fin en {diasFin} d</Text> : null}
+          {n !== null ? <Text dimColor> · semana {n}{c.semanas ? ` de ${c.semanas}` : ''}</Text> : null}
+          {diasFin !== null && diasFin >= 0
+            ? <Text dimColor> · {diasFin === 1 ? 'falta 1 día' : `faltan ${diasFin} días`}</Text>
+            : null}
         </Text>
       )
     }
@@ -237,21 +248,50 @@ export const register: Register = (on, options) => {
     const promedio = b !== null && b.promedio !== null
       ? (
         <Text>
-          <Text dimColor>🎓 </Text>
-          <Text color={b.promedio >= meta ? 'success' : 'warning'}>
-            {b.aproximado ? '≈' : ''}{b.promedio.toFixed(2).replace('.', ',')}
-          </Text>
-          <Text dimColor> / {String(meta).replace('.', ',')}</Text>
+          <Text dimColor>🎓 Promedio {b.aproximado ? 'aprox. ' : ''}</Text>
+          <Text color={b.promedio >= meta ? 'success' : 'warning'}>{coma(b.promedio)}</Text>
+          <Text dimColor> · meta de beca {coma(meta, 1)}</Text>
+          {b.promedio >= meta
+            ? <Text color="success"> (por encima ✓)</Text>
+            : <Text dimColor> (faltan {coma(meta - b.promedio)})</Text>}
+          <Text dimColor> · calculado con {b.materias} de {b.total} materias</Text>
         </Text>
         )
       : null
 
     const piezas = [entrega, semestre, promedio].filter(x => x !== null)
+    // Nunca vacío: si todavía no hay nada que mostrar, se dice que está cargando.
+    const pieza = piezas.length > 0
+      ? piezas[(await read($, vista)) % piezas.length]
+      : <Text dimColor>📌 cargando…</Text>
+    // La pista del engine (p. ej. «esc to interrupt») se conserva delante, si la hay.
+    const conPista = e.props.hint.replace(/·/g, '').trim() !== ''
+    return (
+      <Box flexDirection="row" width={columnas}>
+        {conPista ? <Box flexShrink={0}>{linea}</Box> : null}
+        {conPista ? <Text dimColor> · </Text> : null}
+        <Box flexGrow={1} flexShrink={1}>
+          <Text wrap="truncate-end">{pieza}</Text>
+        </Box>
+      </Box>
+    )
+  })
+
+  // Sobre el prompt, solo cuando hace falta: el corte desactualizado o un bloque ✍️ en curso.
+  // Lo que dibujan otros mods ahí (la fila de image-preview, por ejemplo) se deja pasar siempre.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
+    await read($, tick)
+    const ahora = await $.clock.now()
+    const c = await read($, ctx)
+    const corteMal = c !== null && c.esperado !== null && c.esperado !== c.corte
+    const enCurso = (await read($, bloques)).find(x => x.inicio <= ahora && ahora < x.fin)
+    if (!corteMal && !enCurso) return next(e)
+
+    const otros = await next(e)
+    const { Box, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="column">
-        {piezas.length > 0
-          ? <Text wrap="truncate-end">{piezas.flatMap((x, k) => (k === 0 ? [x] : [sep, x]))}</Text>
-          : null}
         {corteMal && c
           ? <Text color="error">⚠️ Por fecha ya es {c.esperado}: falta actualizar CORTE ACTIVO en el CLAUDE.md raíz.</Text>
           : null}
