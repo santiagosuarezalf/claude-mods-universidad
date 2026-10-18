@@ -1,0 +1,13 @@
+{
+  "name": "guardian-entregables",
+  "version": "0.1.0",
+  "description": "Frena entregas finales mal nombradas o fuera de su carpeta de corte en Entregables/, y códigos de compañeros que no están en companeros.md.",
+  "userConfig": {
+    "codigo": {
+      "type": "string",
+      "title": "Tu código de estudiante",
+      "description": "Va en el nombre de cada entrega: «Trabajo - <código>.ext». Vacío: solo se revisa la carpeta.",
+      "default": ""
+    }
+  }
+}

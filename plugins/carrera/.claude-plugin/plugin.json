@@ -1,0 +1,26 @@
+{
+  "name": "carrera",
+  "version": "0.1.0",
+  "description": "Tu semestre dentro de Claude Code: próxima entrega en el pie, banda con corte/semana/promedio y temporizador de bloques ✍️, leyendo tu Google Calendar.",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "calendario": {
+      "type": "string",
+      "title": "Calendario",
+      "description": "Nombre del calendario de Google con las entregas (como aparece en Google Calendar).",
+      "default": "University"
+    },
+    "metaPromedio": {
+      "type": "number",
+      "title": "Meta de promedio",
+      "description": "Promedio objetivo (escala 0–10) para el medidor 🎓.",
+      "default": 9.3
+    },
+    "utcOffset": {
+      "type": "number",
+      "title": "Desfase UTC",
+      "description": "Horas respecto a UTC de tu zona horaria (Colombia: -5).",
+      "default": -5
+    }
+  }
+}

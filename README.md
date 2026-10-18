@@ -1,0 +1,86 @@
+# claude-mods-universidad
+
+Dos mods de [Claude Code](https://claude.com/claude-code) para llevar la universidad desde la terminal.
+Están pensados para una carpeta de carrera organizada por semestre, materia y corte (abajo se explica la estructura).
+
+## carrera
+
+- **📌 Próxima entrega en el pie**, junto al modo de permisos: `📌 Entrega proyecto · 1d 4h`.
+  Se pone amarillo cuando faltan menos de 48 h y rojo cuando faltan menos de 12.
+  Toma los eventos **de día completo** de tu calendario de Google y salta los que empiezan por ✅ o ❌,
+  así que marcar ✅ al entregar hace avanzar el contador.
+- **Banda sobre el prompt:** `2º sem · CORTE II · semana 11/16 · fin de clases en 34 d`.
+  Muestra una línea roja si el puntero de corte quedó desactualizado.
+- **🎓 Medidor de promedio** frente a tu meta, leído de `<SEMESTRE>/NOTAS.md`.
+- **✍️ Bloques de trabajo:** los eventos con hora que empiezan por ✍️ avisan al arrancar y muestran
+  cuánto queda.
+
+Necesita el conector de **Google Calendar** de claude.ai conectado en Claude Code.
+
+| Opción | Por defecto | Qué es |
+|---|---|---|
+| `calendario` | `University` | Nombre del calendario con las entregas |
+| `metaPromedio` | `9.3` | Promedio objetivo, en escala 0–10 |
+| `utcOffset` | `-5` | Horas respecto a UTC de tu zona horaria |
+
+## guardian-entregables
+
+Cuando Claude va a crear un PDF, DOCX, PPTX o XLSX **nuevo** en `Entregables/`, lo frena si:
+
+- quedaría suelto, fuera de `CORTE I/II/III`;
+- no lleva tu código en el nombre (`Trabajo - <código>.ext`, o `Trabajo - <código>, ID2, ID3.ext` si es grupal);
+- trae un código de 8 dígitos que no aparece en `<SEMESTRE>/companeros.md`.
+
+Los borradores, el código, los archivos que empiezan por `Reparto` y las subcarpetas de proyecto pasan
+sin revisión. Si el guardián falla por algún motivo, deja pasar el archivo en vez de bloquear.
+
+| Opción | Por defecto | Qué es |
+|---|---|---|
+| `codigo` | *(vacío)* | Tu código de estudiante. Vacío: solo revisa la carpeta |
+
+## Instalar
+
+En una sesión de Claude Code:
+
+```
+/plugin install carrera --marketplace santiagosuarezalf/claude-mods-universidad
+/plugin install guardian-entregables --marketplace santiagosuarezalf/claude-mods-universidad
+```
+
+Desde una terminal:
+
+```
+claude plugin install carrera --marketplace santiagosuarezalf/claude-mods-universidad
+claude plugin install guardian-entregables --marketplace santiagosuarezalf/claude-mods-universidad
+```
+
+Responde `y` para agregar el marketplace y elige el alcance (usuario). Las opciones se cambian con
+`/plugin configure <mod>`.
+
+## Estructura que espera
+
+```
+<raíz de la carrera>/
+├── CLAUDE.md            ← con  **SEMESTRE ACTIVO: `2nd SEMESTER`**  y  **CORTE ACTIVO: `CORTE II`**
+└── 2nd SEMESTER/
+    ├── CLAUDE.md        ← «16 semanas de clase» y la tabla de límites de corte:
+    │                       | CORTE I | 28 jul – 5 sep |
+    │                       | CORTE II | 7 sep – 24 oct |
+    │                       | CORTE III | 26 oct – 21 nov |
+    ├── NOTAS.md         ← | Materia | Créditos | Corte I (/30) | Corte II (/30) | Corte III (/40) |
+    ├── companeros.md    ← códigos de 8 dígitos; las filas tachadas (~~…~~) no cuentan
+    └── 01_Materia/Entregables/CORTE II/…
+```
+
+En `NOTAS.md`, cada celda es un número (puntos sobre lo que vale el corte), `x/y` (lo obtenido sobre lo
+evaluado hasta ahora) o vacía. Si a alguna materia le faltan créditos, el promedio sale sin ponderar y se
+marca con `≈`.
+
+## Desarrollo
+
+```
+claude plugin validate plugins/<mod>
+claude plugin test plugins/<mod>
+```
+
+MIT
