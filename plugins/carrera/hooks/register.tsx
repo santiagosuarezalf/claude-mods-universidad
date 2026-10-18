@@ -10,13 +10,11 @@ const semana = atom({ plugin: 'carrera', key: 'semana' } as const, null as numbe
 const ctx = atom({ plugin: 'carrera', key: 'contexto' } as const, null as Contexto | null)
 const notas = atom({ plugin: 'carrera', key: 'beca' } as const, null as Beca | null)
 const tick = atom({ plugin: 'carrera', key: 'tick' } as const, 0)
-const vista = atom({ plugin: 'carrera', key: 'vista' } as const, 0)
 const cargado = atom({ plugin: 'carrera', key: 'cargado' } as const, false)
 
 const CALENDARIO = 'claude.ai Google Calendar'
 const CADA_CALENDARIO_MS = 10 * 60_000
 const CADA_MINUTO_MS = 60_000
-const ROTAR_MS = 8000
 const REINTENTO_MS = 60_000
 const ESPERA_INICIAL_MS = 5000
 const HORA = 3600_000
@@ -153,7 +151,6 @@ async function iniciar ($: EngineInterface) {
   $.clock.after(ESPERA_INICIAL_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
 
   $.clock.every(CADA_CALENDARIO_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
-  $.clock.every(ROTAR_MS, () => { void update($, vista, n => n + 1) })
   $.clock.every(CADA_MINUTO_MS, async () => {
     await update($, tick, n => n + 1)
     // Aviso cuando arranca un bloque ✍️ del calendario
@@ -191,63 +188,70 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Pie, en la línea de pistas bajo el prompt (junto a «plan mode on»): rota cada 8 s entre la
-  // próxima entrega, el semestre y el promedio. No va en SessionMode porque sub-meter dibuja ahí y
-  // no le pasa el turno a otros mods cuando no hay etiquetas de modo.
-  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+  // Renglón propio sobre el prompt, siempre visible: próxima entrega · semestre · promedio, todo junto.
+  // Debajo, solo cuando hace falta: el corte desactualizado o un bloque ✍️ en curso.
+  // No va en el pie: sub-meter dibuja ahí y no le pasa el turno a otros mods.
+  // Lo que dibujan otros mods en esta banda (la fila de image-preview, por ejemplo) se deja pasar siempre.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
     await read($, tick)
     const ahora = await $.clock.now()
     const prox = (await read($, entregas)).find(x => x.cierra > ahora)
     const c = await read($, ctx)
     const n = await read($, semana)
     const b = await read($, notas)
-    const ancho = Math.max(14, Math.min(34, Math.floor((e.viewport?.columns ?? 100) / 4)))
-
-    const piezas: string[] = []
-    if (!prox && !(await read($, cargado))) {
-      // Mientras llega la primera lectura del calendario, el pie no queda vacío.
-      piezas.push('📌 cargando calendario…')
-    }
-    if (prox) {
-      const alerta = colorPorHoras((prox.cierra - ahora) / HORA) === 'error' ? '🔴 ' : ''
-      piezas.push(`📌 ${alerta}${recortar(prox.titulo, ancho)} · ${restante(prox.cierra - ahora)}`)
-    }
-    if (c) {
-      const corteMal = c.esperado !== null && c.esperado !== c.corte
-      const diasFin = c.finClases === null ? null : Math.ceil((c.finClases - ahora) / (24 * HORA))
-      const sem = c.semestre.replace(/ SEMESTER$/i, '').replace(/^(\d+)(st|nd|rd|th)$/i, '$1º')
-      piezas.push(
-        `🗓️ ${sem} sem · ${corteMal ? '⚠️ ' : ''}${c.corte}` +
-        (n !== null ? ` · semana ${n}${c.semanas ? `/${c.semanas}` : ''}` : '') +
-        (diasFin !== null && diasFin >= 0 ? ` · fin en ${diasFin} d` : ''),
-      )
-    }
-    if (b !== null && b.promedio !== null) {
-      const prom = `${b.aproximado ? '≈' : ''}${b.promedio.toFixed(2).replace('.', ',')}`
-      piezas.push(`🎓 ${prom} / ${String(meta).replace('.', ',')} · ${b.materias}/${b.total} materias`)
-    }
-    if (piezas.length === 0) return next(e)
-
-    const actual = piezas[(await read($, vista)) % piezas.length]
-    const tail = e.props.tail ? `${e.props.tail} · ${actual}` : ` ${actual}`
-    return next({ ...e, props: { ...e.props, tail } })
-  })
-
-  // Sobre el prompt, solo cuando hace falta: el corte desactualizado o un bloque ✍️ en curso.
-  // Lo que dibujan otros mods ahí (la fila de image-preview, por ejemplo) se deja pasar siempre.
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
-    await read($, tick)
-    const ahora = await $.clock.now()
-    const c = await read($, ctx)
     const corteMal = c !== null && c.esperado !== null && c.esperado !== c.corte
     const enCurso = (await read($, bloques)).find(x => x.inicio <= ahora && ahora < x.fin)
-    if (!corteMal && !enCurso) return next(e)
+    const yaCargo = await read($, cargado)
+    if (!prox && !c && b === null && !enCurso && yaCargo) return next(e)
 
     const otros = await next(e)
     const { Box, Text } = $.ui.resolve(e)
+    const ancho = Math.max(20, Math.floor(e.props.bodyColumns / 3))
+    const sep = <Text dimColor>   ·   </Text>
+
+    const entrega = prox
+      ? (
+        <Text>
+          <Text dimColor>📌 </Text>
+          <Text>{recortar(prox.titulo, ancho)}</Text>
+          <Text color={colorPorHoras((prox.cierra - ahora) / HORA)}> · {restante(prox.cierra - ahora)}</Text>
+        </Text>
+        )
+      : yaCargo ? null : <Text dimColor>📌 cargando calendario…</Text>
+
+    let semestre = null
+    if (c) {
+      const diasFin = c.finClases === null ? null : Math.ceil((c.finClases - ahora) / (24 * HORA))
+      const sem = c.semestre.replace(/ SEMESTER$/i, '').replace(/^(\d+)(st|nd|rd|th)$/i, '$1º')
+      semestre = (
+        <Text>
+          <Text dimColor>🗓️ {sem} sem · </Text>
+          <Text color={corteMal ? 'error' : undefined}>{c.corte}</Text>
+          {n !== null ? <Text dimColor> · semana {n}{c.semanas ? `/${c.semanas}` : ''}</Text> : null}
+          {diasFin !== null && diasFin >= 0 ? <Text dimColor> · fin en {diasFin} d</Text> : null}
+        </Text>
+      )
+    }
+
+    const promedio = b !== null && b.promedio !== null
+      ? (
+        <Text>
+          <Text dimColor>🎓 </Text>
+          <Text color={b.promedio >= meta ? 'success' : 'warning'}>
+            {b.aproximado ? '≈' : ''}{b.promedio.toFixed(2).replace('.', ',')}
+          </Text>
+          <Text dimColor> / {String(meta).replace('.', ',')}</Text>
+        </Text>
+        )
+      : null
+
+    const piezas = [entrega, semestre, promedio].filter(x => x !== null)
     return (
       <Box flexDirection="column">
+        {piezas.length > 0
+          ? <Text wrap="truncate-end">{piezas.flatMap((x, k) => (k === 0 ? [x] : [sep, x]))}</Text>
+          : null}
         {corteMal && c
           ? <Text color="error">⚠️ Por fecha ya es {c.esperado}: falta actualizar CORTE ACTIVO en el CLAUDE.md raíz.</Text>
           : null}
