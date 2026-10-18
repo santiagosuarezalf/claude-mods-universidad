@@ -57,12 +57,12 @@ async function texto (ui: Awaited<ReturnType<typeof pie>>) {
   return (await ui.find({ type: 'Box' }))?.text ?? ''
 }
 
-test('el pie muestra una cosa a la vez y rota cada 5 s', async ($, on) => {
+test('el pie muestra una cosa a la vez y rota cada 5 s entre 📌, 🗓️, 🎓 y 🎯', async ($, on) => {
   const m = mundo(on)
   await abrir($)
   await m.clock.advance(100)
   const vistos: string[] = []
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const ui = await pie($)
     vistos.push(await texto(ui))
     await ui.unmount()
@@ -72,7 +72,8 @@ test('el pie muestra una cosa a la vez y rota cada 5 s', async ($, on) => {
   expect(vistos.some(t => t.endsWith('🗓️ 2º semestre · CORTE II · semana 11 de 16 · faltan 35 días'))).toBe(true)
   expect(vistos.some(t => t.includes('🎓 Promedio aprox. 9,00 · meta de beca 9,3 (faltan 0,30) · calculado con 1 de 1 materias'))).toBe(true)
   // Una sola cosa por vez
-  for (const t of vistos) expect([t.includes('📌'), t.includes('🗓️'), t.includes('🎓')].filter(Boolean).length).toBe(1)
+  expect(vistos.some(t => t.startsWith('🎯 Para 9,3: necesitas'))).toBe(true)
+  for (const t of vistos) expect([t.includes('📌'), t.includes('🗓️'), t.includes('🎓'), t.includes('🎯')].filter(Boolean).length).toBe(1)
 })
 
 test('el pie ocupa un solo renglón y un ancho fijo', async ($, on) => {
@@ -106,4 +107,61 @@ test('en la banda sobre el prompt, lo de otros mods va encima del bloque ✍️'
   const hijos = (raiz?.children ?? []) as { type?: string; props?: { key?: string } }[]
   expect(hijos[0]?.props?.key).toBe('engine')
   expect(raiz?.text).toContain('✍️ ajedrez funcional')
+})
+
+/** Monta la banda sobre el prompt de carrera, en un terminal de 160 columnas. */
+const bandaCarrera = ($: Engine) =>
+  $.ui.mount({
+    plugin: 'carrera',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, bodyColumns: 150 } as never,
+    viewport: { columns: 160, rows: 40 },
+  })
+
+test('las ventanas «🪟» salen en la banda: máximo 3, la que cierra primero arriba, y el resto contado', async ($, on) => {
+  const m = mundo(on)
+  // Cinco entregas abiertas que ya pasaron la mitad de su ventana (hoy es dom 18 oct)
+  m.store.eventos = [
+    ...EVENTOS,
+    ...[19, 20, 21, 22, 23].map(d => ({
+      summary: `Taller ${d}`,
+      description: '🪟 Abre: 2026-10-10',
+      start: { date: `2026-10-${d}` },
+      end: { date: `2026-10-${d + 1}` },
+    })),
+  ]
+  await abrir($)
+  await m.clock.advance(100)
+  const ui = await bandaCarrera($)
+  const texto = (await ui.find({ type: 'Box' }))?.text ?? ''
+  expect(texto).toContain('📬 Taller 19 sigue sin ✅')
+  expect(texto).toContain('📬 Taller 21 sigue sin ✅')
+  expect(texto).not.toContain('Taller 22')
+  expect(texto).toContain('… y 2 más abiertas')
+  expect(texto.indexOf('Taller 19')).toBeLessThan(texto.indexOf('Taller 20'))
+  // El ✍️ sigue debajo de las ventanas
+  expect(texto.indexOf('… y 2 más')).toBeLessThan(texto.indexOf('✍️'))
+})
+
+test('el día que abre y el día que cierra', async ($, on) => {
+  const m = mundo(on)
+  m.store.eventos = [
+    { summary: 'Quiz U3', description: '🪟 Abre: 2026-10-18', start: { date: '2026-10-25' }, end: { date: '2026-10-26' } },
+    { summary: 'Taller final', description: '🪟 Abre: 2026-10-12', start: { date: '2026-10-18' }, end: { date: '2026-10-19' } },
+  ]
+  await abrir($)
+  await m.clock.advance(100)
+  const texto = (await (await bandaCarrera($)).find({ type: 'Box' }))?.text ?? ''
+  expect(texto).toContain('🔴 HOY cierra Taller final (23:59) · sin ✅')
+  expect(texto).toContain('📬 Abrió hoy: Quiz U3 · cierra dom 25 oct (en 7 días)')
+})
+
+test('/notas responde con la tabla por materia y cuánto falta', async ($, on) => {
+  mundo(on)
+  await abrir($)
+  const r = await $.command.run({ command: 'notas' } as never) as { text?: string }
+  expect(r.text).toContain('🎓 Beca — meta 9,3')
+  expect(r.text).toContain('DPOO')
+  expect(r.text).toContain('🎯 Para 9,3')
 })

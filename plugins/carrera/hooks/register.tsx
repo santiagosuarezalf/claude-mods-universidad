@@ -1,14 +1,18 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Beca, Bloque, Contexto, Entrega } from '../types'
-import { beca, clasificar, contexto, fechaLocal, leerEventos, punteros, recortar, restante, usarZona } from './logica'
+import type { Beca, Bloque, Contexto, Entrega, Meta } from '../types'
+import {
+  beca, clasificar, coma, contexto, cuantoFalta, diasHasta, fechaCorta, fechaLocal, fraseMeta, leerEventos, punteros, recortar, restante,
+  tablaNotas, usarZona, ventanas,
+} from './logica'
 
 const entregas = atom({ plugin: 'carrera', key: 'entregas' } as const, [] as Entrega[])
 const bloques = atom({ plugin: 'carrera', key: 'bloques' } as const, [] as Bloque[])
 const semana = atom({ plugin: 'carrera', key: 'semana' } as const, null as number | null)
 const ctx = atom({ plugin: 'carrera', key: 'contexto' } as const, null as Contexto | null)
 const notas = atom({ plugin: 'carrera', key: 'beca' } as const, null as Beca | null)
+const falta = atom({ plugin: 'carrera', key: 'meta' } as const, null as Meta | null)
 const tick = atom({ plugin: 'carrera', key: 'tick' } as const, 0)
 const vista = atom({ plugin: 'carrera', key: 'vista' } as const, 0)
 const cargado = atom({ plugin: 'carrera', key: 'cargado' } as const, false)
@@ -25,6 +29,12 @@ const ESPERA_INICIAL_MS = 5000
  */
 const RESERVA = 60
 const HORA = 3600_000
+/**
+ * Ventanas («🪟 Abre:» en la descripción) que se muestran a la vez sobre el prompt; las demás se cuentan.
+ * En la terminal van con 📬: el 🪟 es de Unicode 13 y muchas fuentes de terminal no lo traen.
+ */
+const MAX_VENTANAS = 3
+const NARANJA = '#ff8700'
 
 /** La carpeta raíz de la carrera: la del CLAUDE.md que tiene los punteros, de aquí hacia arriba. */
 async function raiz ($: EngineInterface) {
@@ -44,6 +54,7 @@ async function leerArchivos ($: EngineInterface) {
   await update($, ctx, () => contexto(p.semestre, p.corte, mdSemestre, ahora))
   const mdNotas = await $.fs.read(`${r.dir}/${p.semestre}/NOTAS.md`).catch(() => '')
   await update($, notas, () => beca(mdNotas))
+  await update($, falta, () => cuantoFalta(mdNotas, metaPromedio))
 }
 
 /** El id del calendario cuyo nombre da la opción `calendario` (se busca una vez y se guarda). */
@@ -96,12 +107,15 @@ async function leerTramo ($: EngineInterface, id: string, desde: string, hasta: 
   return { resultado, eventos, fallo, colgado }
 }
 
-/** Una semana del calendario configurado, en tramos cortos para no pasar el tope de la respuesta. */
+/**
+ * Dos semanas del calendario configurado, en tramos cortos para no pasar el tope de la respuesta:
+ * así las ventanas «🪟» de hasta 14 días se avisan desde el día que abren.
+ */
 async function leerCalendario ($: EngineInterface, nombre: string) {
   const id = await idCalendario($, nombre)
   if (id === null) return
   const ahora = await $.clock.now()
-  const tramos: [number, number][] = [[0, 2], [3, 5], [6, 7]]
+  const tramos: [number, number][] = [[0, 2], [3, 5], [6, 8], [9, 11], [12, 14]]
   const partes = await Promise.all(tramos.map(([a, b]) =>
     leerTramo($, id, fechaLocal(ahora + a * 24 * HORA), fechaLocal(ahora + b * 24 * HORA))))
   const eventos = partes.flatMap(p => p.eventos)
@@ -135,10 +149,23 @@ async function aplicar ($: EngineInterface, eventos: ReturnType<typeof leerEvent
   await update($, entregas, () => c.entregas)
   await update($, bloques, () => c.bloques)
   await update($, semana, () => c.semana)
+  await avisarCierres($)
+}
+
+/** Una notificación por sesión para cada ventana «🪟» que cierra hoy sin ✅. */
+async function avisarCierres ($: EngineInterface) {
+  const ahora = await $.clock.now()
+  for (const v of ventanas(await read($, entregas), ahora)) {
+    const clave = `cierra:${v.titulo}@${v.cierra}`
+    if (v.tipo !== 'cierra' || avisados.has(clave)) continue
+    avisados.add(clave)
+    $.ui.toast(`🔴 HOY cierra ${recortar(v.titulo, 60)} (23:59) · sin ✅`)
+  }
 }
 
 let iniciado = false
 let nombreCal = 'University'
+let metaPromedio = 9.3
 const avisados = new Set<string>()
 
 /**
@@ -170,21 +197,29 @@ async function iniciar ($: EngineInterface) {
         $.ui.toast(`✍️ Empieza el bloque: ${recortar(b.titulo, 60)} (${restante(b.fin - ahora)})`)
       }
     }
+    await avisarCierres($)
   })
 }
-
-/** 9.3 → «9,30»: con coma decimal, como se escriben las notas. */
-const coma = (x: number, decimales = 2) => x.toFixed(decimales).replace('.', ',')
 
 const colorPorHoras = (horas: number) => (horas <= 12 ? 'error' : horas <= 48 ? 'warning' : undefined)
 
 export const register: Register = (on, options) => {
   nombreCal = String(options.calendario ?? 'University')
   const meta = Number(options.metaPromedio ?? 9.3)
+  metaPromedio = meta
   usarZona(Number(options.utcOffset ?? -5))
   on('session.start', async ($, e, next) => {
     await iniciar($)
+    await $.command.register({ name: 'notas', description: 'Notas del semestre por materia y cuánto falta para la meta de promedio' })
     return next(e)
+  })
+
+  // /notas: la tabla por materia con lo que lleva, lo máximo posible y cuánto falta para la meta.
+  on('command.run', { command: 'notas' }, async $ => {
+    await leerArchivos($).catch(() => undefined)
+    const m = await read($, falta)
+    const b = await read($, notas)
+    return { text: m === null ? 'No encontré la tabla de NOTAS.md del semestre activo.' : tablaNotas(m, b, meta) }
   })
 
   on('prompt.submit', async ($, e, next) => {
@@ -259,7 +294,12 @@ export const register: Register = (on, options) => {
         )
       : null
 
-    const piezas = [entrega, semestre, promedio].filter(x => x !== null)
+    const m = await read($, falta)
+    const objetivo = m !== null && b !== null && b.promedio !== null
+      ? <Text dimColor>{fraseMeta(m, meta)}</Text>
+      : null
+
+    const piezas = [entrega, semestre, promedio, objetivo].filter(x => x !== null)
     // Nunca vacío: si todavía no hay nada que mostrar, se dice que está cargando.
     const pieza = piezas.length > 0
       ? piezas[(await read($, vista)) % piezas.length]
@@ -277,7 +317,8 @@ export const register: Register = (on, options) => {
     )
   })
 
-  // Sobre el prompt, solo cuando hace falta: el corte desactualizado o un bloque ✍️ en curso.
+  // Sobre el prompt, solo cuando hace falta: el corte desactualizado, las ventanas «🪟» que toca avisar
+  // (las 3 que cierran primero) y el bloque ✍️ en curso.
   // Lo que dibujan otros mods ahí (la English note de ingles, la fila de image-preview) va primero,
   // encima de estos avisos: así el orden no depende de qué mod cargó antes.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -287,15 +328,34 @@ export const register: Register = (on, options) => {
     const c = await read($, ctx)
     const corteMal = c !== null && c.esperado !== null && c.esperado !== c.corte
     const enCurso = (await read($, bloques)).find(x => x.inicio <= ahora && ahora < x.fin)
-    if (!corteMal && !enCurso) return next(e)
+    const abiertas = ventanas(await read($, entregas), ahora)
+    if (!corteMal && !enCurso && abiertas.length === 0) return next(e)
 
     const otros = await next(e)
     const { Box, Text } = $.ui.resolve(e)
+    const ancho = Math.max(20, e.props.bodyColumns - 40)
+    const renglonVentana = (v: (typeof abiertas)[number]) => {
+      const titulo = recortar(v.titulo, ancho)
+      if (v.tipo === 'cierra') return <Text color="error">🔴 HOY cierra {titulo} (23:59) · sin ✅</Text>
+      if (v.tipo === 'abrio') {
+        const dias = diasHasta(v.cierra, ahora)
+        return (
+          <Text color="warning">
+            📬 Abrió hoy: {titulo} · cierra {fechaCorta(v.cierra)} (en {dias} {dias === 1 ? 'día' : 'días'})
+          </Text>
+        )
+      }
+      return <Text color={NARANJA}>📬 {titulo} sigue sin ✅ · cierra en {restante(v.cierra - ahora)}</Text>
+    }
     return (
       <Box flexDirection="column">
         {otros}
         {corteMal && c
           ? <Text color="error">⚠️ Por fecha ya es {c.esperado}: falta actualizar CORTE ACTIVO en el CLAUDE.md raíz.</Text>
+          : null}
+        {abiertas.slice(0, MAX_VENTANAS).map(renglonVentana)}
+        {abiertas.length > MAX_VENTANAS
+          ? <Text dimColor>   … y {abiertas.length - MAX_VENTANAS} más abiertas</Text>
           : null}
         {enCurso
           ? (

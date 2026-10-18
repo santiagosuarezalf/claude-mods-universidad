@@ -14,10 +14,22 @@ Un renglón en el pie, junto a la etiqueta del modo de permisos, que cambia cada
 - **🗓️ Semestre:** `🗓️ 2º semestre · CORTE II · semana 11 de 16 · faltan 35 días`.
 - **🎓 Promedio** frente a tu meta, leído de `<SEMESTRE>/NOTAS.md`:
   `🎓 Promedio aprox. 8,69 · meta de beca 9,3 (faltan 0,61) · calculado con 7 de 7 materias`.
+- **🎯 Cuánto falta para la meta:** `🎯 Para 9,3: necesitas 446 de los 460 puntos que quedan (97 %) ·
+  máximo posible 9,50`. Cada materia vale 100 puntos (30 + 30 + 40); con créditos en todas, va ponderado.
 
 El renglón tiene ancho fijo para no empujar lo que haya a la derecha del pie. Sobre el prompt, solo
-cuando hace falta: una línea roja si el puntero de corte quedó desactualizado y **✍️ el bloque de
-trabajo en curso** (los eventos con hora que empiezan por ✍️ avisan al arrancar y muestran cuánto queda).
+cuando hace falta:
+
+- una línea roja si el puntero de corte quedó desactualizado;
+- **📬 ventanas de entrega:** si la descripción del evento trae la línea `🪟 Abre: AAAA-MM-DD`, avisa el
+  día que abre (amarillo), desde la mitad de la ventana si sigue sin ✅ (naranja) y el día que cierra
+  (rojo, con notificación). Muestra las 3 que cierran primero y cuenta el resto. El evento sigue siendo
+  de un solo día: la ventana va en la descripción;
+- **✍️ el bloque de trabajo en curso** (los eventos con hora que empiezan por ✍️ avisan al arrancar y
+  muestran cuánto queda).
+
+**`/notas`** muestra la tabla de `NOTAS.md` por materia: lo que lleva, el máximo al que todavía puede
+llegar (⚠️ si ya no alcanza la meta) y cuánto falta para la meta del promedio.
 
 Necesita el conector de **Google Calendar** de claude.ai conectado en Claude Code.
 
