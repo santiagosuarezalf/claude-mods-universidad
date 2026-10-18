@@ -11,11 +11,14 @@ const ctx = atom({ plugin: 'carrera', key: 'contexto' } as const, null as Contex
 const notas = atom({ plugin: 'carrera', key: 'beca' } as const, null as Beca | null)
 const tick = atom({ plugin: 'carrera', key: 'tick' } as const, 0)
 const vista = atom({ plugin: 'carrera', key: 'vista' } as const, 0)
+const cargado = atom({ plugin: 'carrera', key: 'cargado' } as const, false)
 
 const CALENDARIO = 'claude.ai Google Calendar'
 const CADA_CALENDARIO_MS = 10 * 60_000
 const CADA_MINUTO_MS = 60_000
 const ROTAR_MS = 8000
+const REINTENTO_MS = 60_000
+const ESPERA_INICIAL_MS = 5000
 const HORA = 3600_000
 
 /** La carpeta raíz de la carrera: la del CLAUDE.md que tiene los punteros, de aquí hacia arriba. */
@@ -82,7 +85,10 @@ async function leerTramo ($: EngineInterface, id: string, desde: string, hasta: 
       if (eventos.length > 0) break
     }
   }
-  return { resultado, eventos, fallo }
+  // Si el conector tarda, Claude Code pasa la llamada a segundo plano y devuelve solo ese aviso.
+  const colgado = resultado.content.some(c =>
+    /moved to the background|is still running/.test(String((c as { text?: unknown }).text ?? '')))
+  return { resultado, eventos, fallo, colgado }
 }
 
 /** Una semana del calendario configurado, en tramos cortos para no pasar el tope de la respuesta. */
@@ -94,20 +100,28 @@ async function leerCalendario ($: EngineInterface, nombre: string) {
   const partes = await Promise.all(tramos.map(([a, b]) =>
     leerTramo($, id, fechaLocal(ahora + a * 24 * HORA), fechaLocal(ahora + b * 24 * HORA))))
   const eventos = partes.flatMap(p => p.eventos)
-  const conError = partes.some(p => p.resultado.isError)
+  const conError = partes.some(p => p.resultado.isError || p.colgado)
   // Diagnóstico: la forma de las últimas respuestas, para depurar cuando no llegan eventos
   await $.store.set('diagnostico', {
+    cuando: new Date(ahora).toISOString(),
     isError: conError,
     tramos: partes.map(p => ({
       isError: p.resultado.isError,
+      colgado: p.colgado,
       inicio: p.resultado.content.map(c => String((c as { text?: unknown }).text ?? '').slice(0, 300)),
       eventos: p.eventos.length,
       fallo: p.fallo,
     })),
     eventos: eventos.length,
   } as never)
-  if (conError) return
+  // Ante un fallo se conservan los eventos guardados y se reintenta en un minuto, no en diez.
+  if (conError) {
+    $.clock.after(REINTENTO_MS, () => { void leerCalendario($, nombre).catch(() => undefined) })
+    return
+  }
   await $.store.set('eventos', eventos as never)
+  await $.store.set('ultimaLectura', new Date(ahora).toISOString() as never)
+  await update($, cargado, () => true)
   await aplicar($, eventos)
 }
 
@@ -130,9 +144,13 @@ async function iniciar ($: EngineInterface) {
   if (iniciado) return
   iniciado = true
   const guardados = await $.store.get('eventos')
-  if (Array.isArray(guardados)) await aplicar($, guardados as ReturnType<typeof leerEventos>)
+  if (Array.isArray(guardados) && guardados.length > 0) {
+    await update($, cargado, () => true)
+    await aplicar($, guardados as ReturnType<typeof leerEventos>)
+  }
   void leerArchivos($).catch(() => undefined)
-  void leerCalendario($, nombreCal).catch(() => undefined)
+  // La primera lectura espera a que el conector termine de conectar al abrir la sesión.
+  $.clock.after(ESPERA_INICIAL_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
 
   $.clock.every(CADA_CALENDARIO_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
   $.clock.every(ROTAR_MS, () => { void update($, vista, n => n + 1) })
@@ -185,6 +203,10 @@ export const register: Register = (on, options) => {
     const ancho = Math.max(14, Math.min(34, Math.floor((e.viewport?.columns ?? 100) / 4)))
 
     const piezas: RenderChildren[] = []
+    if (!prox && !(await read($, cargado))) {
+      // Mientras llega la primera lectura del calendario, el pie no queda vacío.
+      piezas.push(<Text dimColor>📌 cargando calendario…</Text>)
+    }
     if (prox) {
       const falta = prox.cierra - ahora
       piezas.push(
