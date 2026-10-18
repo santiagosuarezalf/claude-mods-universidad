@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
 import type { Beca, Bloque, Contexto, Entrega } from '../types'
 import { beca, clasificar, contexto, fechaLocal, leerEventos, punteros, recortar, restante, usarZona } from './logica'
@@ -10,10 +10,12 @@ const semana = atom({ plugin: 'carrera', key: 'semana' } as const, null as numbe
 const ctx = atom({ plugin: 'carrera', key: 'contexto' } as const, null as Contexto | null)
 const notas = atom({ plugin: 'carrera', key: 'beca' } as const, null as Beca | null)
 const tick = atom({ plugin: 'carrera', key: 'tick' } as const, 0)
+const vista = atom({ plugin: 'carrera', key: 'vista' } as const, 0)
 
 const CALENDARIO = 'claude.ai Google Calendar'
 const CADA_CALENDARIO_MS = 10 * 60_000
 const CADA_MINUTO_MS = 60_000
+const ROTAR_MS = 8000
 const HORA = 3600_000
 
 /** La carpeta raíz de la carrera: la del CLAUDE.md que tiene los punteros, de aquí hacia arriba. */
@@ -59,22 +61,52 @@ async function idCalendario ($: EngineInterface, nombre: string) {
   return null
 }
 
-/** Dos semanas del calendario configurado, directo del conector de Google Calendar. */
+/** Lee `list_events` de un tramo; si la respuesta fue muy larga, la recupera del archivo donde quedó. */
+async function leerTramo ($: EngineInterface, id: string, desde: string, hasta: string) {
+  const resultado = await $.mcp.call(CALENDARIO, 'list_events', {
+    calendarId: id,
+    startTime: `${desde}T00:00:00`,
+    endTime: `${hasta}T23:59:00`,
+    orderBy: 'startTime',
+    pageSize: 50,
+  })
+  let eventos = resultado.isError ? [] : leerEventos(resultado)
+  let fallo: string | null = null
+  // Una respuesta muy larga no llega entera: Claude Code la guarda en un archivo y avisa dónde.
+  if (!resultado.isError && eventos.length === 0) {
+    for (const c of resultado.content) {
+      const ruta = /saved to (\/[^\s]+\.(?:txt|json))/.exec(String((c as { text?: unknown }).text ?? ''))?.[1]
+      if (!ruta) continue
+      const texto = await $.fs.read(ruta).catch((err: unknown) => { fallo = `${ruta}: ${String(err)}`; return '' })
+      eventos = leerEventos({ content: [{ type: 'text', text: texto }] })
+      if (eventos.length > 0) break
+    }
+  }
+  return { resultado, eventos, fallo }
+}
+
+/** Una semana del calendario configurado, en tramos cortos para no pasar el tope de la respuesta. */
 async function leerCalendario ($: EngineInterface, nombre: string) {
   const id = await idCalendario($, nombre)
   if (id === null) return
   const ahora = await $.clock.now()
-  const hoy = fechaLocal(ahora)
-  const hasta = fechaLocal(ahora + 14 * 24 * HORA)
-  const resultado = await $.mcp.call(CALENDARIO, 'list_events', {
-    calendarId: id,
-    startTime: `${hoy}T00:00:00`,
-    endTime: `${hasta}T23:59:00`,
-    orderBy: 'startTime',
-    pageSize: 150,
-  })
-  if (resultado.isError) return
-  const eventos = leerEventos(resultado)
+  const tramos: [number, number][] = [[0, 2], [3, 5], [6, 7]]
+  const partes = await Promise.all(tramos.map(([a, b]) =>
+    leerTramo($, id, fechaLocal(ahora + a * 24 * HORA), fechaLocal(ahora + b * 24 * HORA))))
+  const eventos = partes.flatMap(p => p.eventos)
+  const conError = partes.some(p => p.resultado.isError)
+  // Diagnóstico: la forma de las últimas respuestas, para depurar cuando no llegan eventos
+  await $.store.set('diagnostico', {
+    isError: conError,
+    tramos: partes.map(p => ({
+      isError: p.resultado.isError,
+      inicio: p.resultado.content.map(c => String((c as { text?: unknown }).text ?? '').slice(0, 300)),
+      eventos: p.eventos.length,
+      fallo: p.fallo,
+    })),
+    eventos: eventos.length,
+  } as never)
+  if (conError) return
   await $.store.set('eventos', eventos as never)
   await aplicar($, eventos)
 }
@@ -86,103 +118,136 @@ async function aplicar ($: EngineInterface, eventos: ReturnType<typeof leerEvent
   await update($, semana, () => c.semana)
 }
 
+let iniciado = false
+let nombreCal = 'University'
+const avisados = new Set<string>()
+
+/**
+ * Carga datos y prende los relojes una sola vez. Corre en session.start, y también en el primer
+ * prompt o turno: un mod instalado con la sesión ya abierta no recibe session.start.
+ */
+async function iniciar ($: EngineInterface) {
+  if (iniciado) return
+  iniciado = true
+  const guardados = await $.store.get('eventos')
+  if (Array.isArray(guardados)) await aplicar($, guardados as ReturnType<typeof leerEventos>)
+  void leerArchivos($).catch(() => undefined)
+  void leerCalendario($, nombreCal).catch(() => undefined)
+
+  $.clock.every(CADA_CALENDARIO_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
+  $.clock.every(ROTAR_MS, () => { void update($, vista, n => n + 1) })
+  $.clock.every(CADA_MINUTO_MS, async () => {
+    await update($, tick, n => n + 1)
+    // Aviso cuando arranca un bloque ✍️ del calendario
+    const ahora = await $.clock.now()
+    for (const b of await read($, bloques)) {
+      const clave = `${b.titulo}@${b.inicio}`
+      if (b.inicio <= ahora && ahora < b.fin && !avisados.has(clave)) {
+        avisados.add(clave)
+        $.ui.toast(`✍️ Empieza el bloque: ${recortar(b.titulo, 60)} (${restante(b.fin - ahora)})`)
+      }
+    }
+  })
+}
+
 const colorPorHoras = (horas: number) => (horas <= 12 ? 'error' : horas <= 48 ? 'warning' : undefined)
 
 export const register: Register = (on, options) => {
-  const avisados = new Set<string>()
-  const nombreCal = String(options.calendario ?? 'University')
+  nombreCal = String(options.calendario ?? 'University')
   const meta = Number(options.metaPromedio ?? 9.3)
   usarZona(Number(options.utcOffset ?? -5))
-
   on('session.start', async ($, e, next) => {
-    const guardados = await $.store.get('eventos')
-    if (Array.isArray(guardados)) await aplicar($, guardados as ReturnType<typeof leerEventos>)
-    void leerArchivos($).catch(() => undefined)
-    void leerCalendario($, nombreCal).catch(() => undefined)
+    await iniciar($)
+    return next(e)
+  })
 
-    $.clock.every(CADA_CALENDARIO_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
-    $.clock.every(CADA_MINUTO_MS, async () => {
-      await update($, tick, n => n + 1)
-      // Aviso cuando arranca un bloque ✍️ del calendario
-      const ahora = await $.clock.now()
-      for (const b of await read($, bloques)) {
-        const clave = `${b.titulo}@${b.inicio}`
-        if (b.inicio <= ahora && ahora < b.fin && !avisados.has(clave)) {
-          avisados.add(clave)
-          $.ui.toast(`✍️ Empieza el bloque: ${recortar(b.titulo, 60)} (${restante(b.fin - ahora)})`)
-        }
-      }
-    })
+  on('prompt.submit', async ($, e, next) => {
+    void iniciar($).catch(() => undefined)
     return next(e)
   })
 
   // Las notas o los punteros pueden cambiar en cualquier turno: se releen al terminar cada uno.
   on('turn.complete', async ($, e, next) => {
+    void iniciar($).catch(() => undefined)
     void leerArchivos($).catch(() => undefined)
     return next(e)
   })
 
-  // (1) Pie, junto al modo: la próxima entrega y cuánto falta.
+  // Pie, junto al modo (como sub-meter): rota cada 8 s entre la próxima entrega, el semestre y el promedio.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     await read($, tick)
     const ahora = await $.clock.now()
     const prox = (await read($, entregas)).find(x => x.cierra > ahora)
-    if (!prox) return next(e)
-
-    const labels = e.props.modes.length > 0 ? await next(e) : null
+    const c = await read($, ctx)
+    const n = await read($, semana)
+    const b = await read($, notas)
     const { Box, Text } = $.ui.resolve(e)
-    const falta = prox.cierra - ahora
     const ancho = Math.max(14, Math.min(34, Math.floor((e.viewport?.columns ?? 100) / 4)))
 
+    const piezas: RenderChildren[] = []
+    if (prox) {
+      const falta = prox.cierra - ahora
+      piezas.push(
+        <Text>
+          <Text dimColor>📌 </Text>
+          <Text>{recortar(prox.titulo, ancho)}</Text>
+          <Text color={colorPorHoras(falta / HORA)}> · {restante(falta)}</Text>
+        </Text>,
+      )
+    }
+    if (c) {
+      const corteMal = c.esperado !== null && c.esperado !== c.corte
+      const diasFin = c.finClases === null ? null : Math.ceil((c.finClases - ahora) / (24 * HORA))
+      const sem = c.semestre.replace(/ SEMESTER$/i, '').replace(/^(\d+)(st|nd|rd|th)$/i, '$1º')
+      piezas.push(
+        <Text>
+          <Text dimColor>🗓️ {sem} sem · </Text>
+          <Text color={corteMal ? 'error' : undefined}>{c.corte}</Text>
+          {n !== null ? <Text dimColor> · semana {n}{c.semanas ? `/${c.semanas}` : ''}</Text> : null}
+          {diasFin !== null && diasFin >= 0 ? <Text dimColor> · fin en {diasFin} d</Text> : null}
+        </Text>,
+      )
+    }
+    if (b !== null && b.promedio !== null) {
+      piezas.push(
+        <Text>
+          <Text dimColor>🎓 </Text>
+          <Text color={b.promedio >= meta ? 'success' : 'warning'}>
+            {b.aproximado ? '≈' : ''}{b.promedio.toFixed(2).replace('.', ',')}
+          </Text>
+          <Text dimColor> / {String(meta).replace('.', ',')} · {b.materias}/{b.total} materias</Text>
+        </Text>,
+      )
+    }
+    if (piezas.length === 0) return next(e)
+
+    const labels = e.props.modes.length > 0 ? await next(e) : null
+    const actual = piezas[(await read($, vista)) % piezas.length]
     return (
       <Box flexDirection="row">
         {labels}
         {labels ? <Text dimColor> · </Text> : null}
-        <Text dimColor>📌 </Text>
-        <Text>{recortar(prox.titulo, ancho)}</Text>
-        <Text color={colorPorHoras(falta / HORA)}> · {restante(falta)}</Text>
+        {actual}
       </Box>
     )
   })
 
-  // (2) (3) (5) Banda sobre el prompt: semestre, corte, semana, beca y el bloque ✍️ en curso.
+  // Sobre el prompt, solo cuando hace falta: el corte desactualizado o un bloque ✍️ en curso.
+  // Lo que dibujan otros mods ahí (la fila de image-preview, por ejemplo) se deja pasar siempre.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const c = await read($, ctx)
-    if (e.props.hasSurvey || c === null) return next(e)
-
+    if (e.props.hasSurvey) return next(e)
     await read($, tick)
     const ahora = await $.clock.now()
-    const n = await read($, semana)
-    const b = await read($, notas)
+    const c = await read($, ctx)
+    const corteMal = c !== null && c.esperado !== null && c.esperado !== c.corte
     const enCurso = (await read($, bloques)).find(x => x.inicio <= ahora && ahora < x.fin)
+    if (!corteMal && !enCurso) return next(e)
+
+    const otros = await next(e)
     const { Box, Text } = $.ui.resolve(e)
-
-    const corteMal = c.esperado !== null && c.esperado !== c.corte
-    const diasFin = c.finClases === null ? null : Math.ceil((c.finClases - ahora) / (24 * HORA))
-    const sem = c.semestre.replace(/ SEMESTER$/i, '').replace(/^(\d+)(st|nd|rd|th)$/i, '$1º')
-
     return (
       <Box flexDirection="column">
-        <Box flexDirection="row" flexWrap="wrap">
-          <Text dimColor>{sem} sem · </Text>
-          <Text color={corteMal ? 'error' : undefined}>{c.corte}</Text>
-          {n !== null ? <Text dimColor> · semana {n}{c.semanas ? `/${c.semanas}` : ''}</Text> : null}
-          {diasFin !== null && diasFin >= 0
-            ? <Text dimColor> · fin de clases en {diasFin} d</Text>
-            : null}
-          {b !== null && b.promedio !== null
-            ? (
-              <Text>
-                <Text dimColor>   🎓 </Text>
-                <Text color={b.promedio >= meta ? 'success' : 'warning'}>
-                  {b.aproximado ? '≈' : ''}{b.promedio.toFixed(2).replace('.', ',')}
-                </Text>
-                <Text dimColor> / {String(meta).replace('.', ',')} · {b.materias}/{b.total} materias</Text>
-              </Text>
-              )
-            : null}
-        </Box>
-        {corteMal
+        {corteMal && c
           ? <Text color="error">⚠️ Por fecha ya es {c.esperado}: falta actualizar CORTE ACTIVO en el CLAUDE.md raíz.</Text>
           : null}
         {enCurso
@@ -193,6 +258,7 @@ export const register: Register = (on, options) => {
             </Text>
             )
           : null}
+        {otros}
       </Box>
     )
   })

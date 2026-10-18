@@ -51,11 +51,13 @@ export function leerEventos (resultado: { content?: readonly unknown[]; structur
       try { candidatos.push(JSON.parse(texto)) } catch { /* no era JSON */ }
     }
   }
+  // La respuesta puede traer la lista en el texto y en la parte estructurada: gana la más completa.
+  let mejor: EventoCal[] = []
   for (const c of candidatos) {
     const eventos = (c as { events?: unknown } | undefined)?.events
-    if (Array.isArray(eventos)) return eventos as EventoCal[]
+    if (Array.isArray(eventos) && eventos.length > mejor.length) mejor = eventos as EventoCal[]
   }
-  return []
+  return mejor
 }
 
 /**

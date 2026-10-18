@@ -18,6 +18,7 @@ declare module 'claude-code' {
       contexto: Contexto | null
       beca: Beca | null
       tick: number
+      vista: number
     }
   }
 }
