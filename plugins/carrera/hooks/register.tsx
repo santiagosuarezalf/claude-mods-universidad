@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Beca, Bloque, Contexto, Entrega, Meta } from '../types'
-import {
+import { barra,
   beca, clasificar, coma, contexto, cuantoFalta, diasHasta, evaluaciones, fechaCorta, fechaLocal, fraseMeta, leerEventos, punteros, recortar, restante,
   tablaNotas, usarZona, ventanas,
 } from './logica'
@@ -390,6 +390,10 @@ export const register: Register = (on, options) => {
       if (dias === 1) return <Text color={VIOLETA}>📖 Mañana: {titulo}</Text>
       return <Text color={VIOLETA}>📖 {titulo} · {fechaCorta(x.cierra)} (en {dias} días)</Text>
     }
+    // Cuánto del bloque ✍️ ya pasó, como la barra del sub-meter.
+    const progreso = enCurso
+      ? barra((ahora - enCurso.inicio) / (enCurso.fin - enCurso.inicio))
+      : barra(0)
     const listaVentanas = [
       ...abiertas.slice(0, MAX_VENTANAS).map(renglonVentana),
       abiertas.length > MAX_VENTANAS
@@ -421,8 +425,12 @@ export const register: Register = (on, options) => {
         {enCurso
           ? (
             <Text>
-              <Text color="claude">✍️ {recortar(enCurso.titulo, Math.max(20, e.props.bodyColumns - 24))}</Text>
-              <Text dimColor> · quedan {restante(enCurso.fin - ahora)}</Text>
+              <Text color="claude">✍️ {recortar(enCurso.titulo, Math.max(20, e.props.bodyColumns - 70))}  </Text>
+              <Text color="claude">{progreso.llena}</Text>
+              <Text dimColor>{progreso.vacia}</Text>
+              <Text dimColor>
+                {'  '}{restante(ahora - enCurso.inicio)} de {restante(enCurso.fin - enCurso.inicio)} · quedan {restante(enCurso.fin - ahora)}
+              </Text>
             </Text>
             )
           : null}

@@ -46,6 +46,12 @@ export function restante (ms: number) {
   return `${Math.floor(horas / 24)}d ${horas % 24}h`
 }
 
+/** Una barra de `largo` celdas para `fraccion` (0 a 1): la parte llena y la vacía, por separado para colorearlas. */
+export function barra (fraccion: number, largo = 20) {
+  const llenas = Math.round(Math.min(1, Math.max(0, fraccion)) * largo)
+  return { llena: '━'.repeat(llenas), vacia: '─'.repeat(largo - llenas) }
+}
+
 export const recortar = (texto: string, max: number) =>
   texto.length <= max ? texto : `${texto.slice(0, max - 1).trimEnd()}…`
 

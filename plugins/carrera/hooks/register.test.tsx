@@ -253,3 +253,13 @@ test('en una terminal angosta siguen una debajo de la otra', async ($, on) => {
   const texto = (await ui.find({ type: 'Box' }))?.text ?? ''
   expect(texto.indexOf('📬 Taller final')).toBeLessThan(texto.indexOf('📖'))
 })
+
+test('el bloque ✍️ en curso lleva una barra de lo que ya pasó, con el tiempo hecho y el total', async ($, on) => {
+  const m = mundo(on)
+  await abrir($)
+  await m.clock.advance(100)
+  const texto = (await (await bandaCarrera($)).find({ type: 'Box' }))?.text ?? ''
+  expect(texto).toContain('✍️ ajedrez funcional')
+  expect(texto).toMatch(/━*─+/)
+  expect(texto).toMatch(/de 5h 0m · quedan/)
+})
