@@ -28,7 +28,8 @@ cuando hace falta:
 - **📖 parciales, sustentaciones y exámenes** de los próximos 7 días, en violeta. Con espacio (≥ 110
   columnas) van en una columna a la derecha y las entregas 📬 a la izquierda, en los mismos renglones;
 - **el evento en curso de cualquier calendario**, al final de la columna derecha, con una barra del color
-  de su calendario: `🏋️ Gym  ━━━━━──── 35m de 1h 30m · quedan 55m`. Necesita un servidor MCP llamado
+  de su calendario: `🏋️ Gym  ━━━━━──── 35m de 1h 30m · quedan 55m`. Si no hay nada en curso, el que sigue:
+  `⏭️ Próximo: 🎓 Clase · 18:00 (en 2h 15m)`. Necesita un servidor MCP llamado
   `gcal-extended` con una herramienta `list_timed_events` que devuelva `{ events: [{ summary, calendar,
   color, start, end }] }`; sin él, simplemente no aparece;
 - **✍️ el bloque de trabajo en curso** (los eventos con hora que empiezan por ✍️ avisan al arrancar y

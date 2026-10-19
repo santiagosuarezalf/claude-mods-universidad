@@ -18,6 +18,9 @@ const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
 const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
 /** "lun 16 nov": el día local de un instante, como se dice en los avisos. */
+/** "18:00", en hora local. */
+export const horaLocal = (ms: number) => new Date(ms + desfaseHoras * 3600_000).toISOString().slice(11, 16)
+
 export function fechaCorta (ms: number) {
   const f = fechaLocal(ms)
   const d = new Date(`${f}T12:00:00Z`)
@@ -389,4 +392,9 @@ export function iconoCalendario (nombre: string): string {
     'fl studio': '🎹', books: '📚', church: '⛪', family: '👪', outings: '🎉', appointment: '🩺',
   }
   return iconos[nombre.trim().toLowerCase()] ?? '⏱️'
+}
+
+/** El próximo evento con hora que todavía no empieza (cualquier calendario), o null. */
+export function proximo (agenda: readonly Evento[], ahora: number): Evento | null {
+  return agenda.filter(e => e.inicio > ahora).sort((a, b) => a.inicio - b.inicio)[0] ?? null
 }

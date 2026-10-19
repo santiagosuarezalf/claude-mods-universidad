@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Beca, Bloque, Contexto, Entrega, Evento, Meta } from '../types'
-import { barra, enCurso as eventosEnCurso, iconoCalendario, leerAgenda,
+import { barra, enCurso as eventosEnCurso, horaLocal, iconoCalendario, leerAgenda, proximo,
   beca, clasificar, coma, contexto, cuantoFalta, diasHasta, evaluaciones, fechaCorta, fechaLocal, fraseMeta, leerEventos, punteros, recortar, restante,
   tablaNotas, usarZona, ventanas,
 } from './logica'
@@ -373,14 +373,18 @@ export const register: Register = (on, options) => {
     const enCurso = (await read($, bloques)).find(x => x.inicio <= ahora && ahora < x.fin)
     const abiertas = ventanas(await read($, entregas), ahora)
     const examenes = evaluaciones(await read($, entregas), ahora, DIAS_EVALUACION)
-    const actuales = eventosEnCurso(await read($, agenda), ahora).slice(0, MAX_EN_CURSO)
-    if (!corteMal && !enCurso && abiertas.length === 0 && examenes.length === 0 && actuales.length === 0) return next(e)
+    const todos = await read($, agenda)
+    const actuales = eventosEnCurso(todos, ahora).slice(0, MAX_EN_CURSO)
+    // Sin nada en curso, el que sigue (en las próximas 12 h que se leen)
+    const siguiente = actuales.length === 0 ? proximo(todos, ahora) : null
+    const derechos = actuales.length + (siguiente ? 1 : 0)
+    if (!corteMal && !enCurso && abiertas.length === 0 && examenes.length === 0 && derechos === 0) return next(e)
 
     const otros = await next(e)
     const { Box, Text } = $.ui.resolve(e)
     // Con espacio, entregas a la izquierda y evaluaciones a la derecha, en los mismos renglones;
     // en una terminal angosta, una lista debajo de la otra como antes.
-    const dosColumnas = e.props.bodyColumns >= 110 && examenes.length + actuales.length > 0
+    const dosColumnas = e.props.bodyColumns >= 110 && examenes.length + derechos > 0
     const mitad = Math.floor((e.props.bodyColumns - 2) / 2)
     const ancho = Math.max(20, e.props.bodyColumns - 40)
     // En dos columnas cada título cabe en su mitad, descontando lo que va antes y después de él.
@@ -433,6 +437,17 @@ export const register: Register = (on, options) => {
         ? <Text dimColor>… y {examenes.length - MAX_VENTANAS} evaluaciones más</Text>
         : null,
       ...actuales.map(renglonActual),
+      siguiente
+        ? (
+          <Text>
+            <Text dimColor>⏭️ Próximo: </Text>
+            <Text color={siguiente.color ?? 'claude'}>
+              {iconoCalendario(siguiente.calendario)} {recortar(siguiente.titulo, dosColumnas ? Math.max(14, mitad - 40) : ancho)}
+            </Text>
+            <Text dimColor> · {horaLocal(siguiente.inicio)} (en {restante(siguiente.inicio - ahora)})</Text>
+          </Text>
+          )
+        : null,
     ]
     return (
       <Box flexDirection="column">

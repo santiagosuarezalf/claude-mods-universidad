@@ -294,3 +294,20 @@ test('el evento en curso de cualquier calendario sale a la derecha, con barra de
   const pintado = JSON.stringify(der)
   expect(pintado).toContain('#fd7941')
 })
+
+test('sin nada en curso, a la derecha sale el próximo evento con su hora y cuánto falta', async ($, on) => {
+  const m = mundo(on, [
+    { summary: 'Introducción a la Teoría de la Computación', calendar: 'University', color: '#4ca8df', start: '2026-10-18T18:00:00-05:00', end: '2026-10-18T20:00:00-05:00' },
+    { summary: 'Leer', calendar: 'Books', color: '#4ca8df', start: '2026-10-18T21:00:00-05:00', end: '2026-10-18T22:00:00-05:00' },
+  ])
+  await abrir($)
+  await m.clock.advance(6000)
+  const ui = await bandaCarrera($)
+  const fila = filaDeDos(await ui.find({ type: 'Box' }))
+  const der = ((fila?.children ?? []) as Nodo[])[1]
+  const plano = (n: unknown): string =>
+    typeof n === 'string' ? n : ((n as Nodo)?.children ?? []).map(plano).join('')
+  const t = plano(der)
+  expect(t).toMatch(/⏭️ Próximo: 🎓 Introducción a la Teoría.* · 18:00 \(en 3h 0m\)/)
+  expect(t).not.toContain('Leer')
+})
