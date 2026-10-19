@@ -1,0 +1,14 @@
+{
+  "name": "copiables",
+  "version": "0.1.0",
+  "description": "Textos para copiar: los bloques con título 📋 de la última respuesta, listados en una franja sobre el prompt, y /copiar N para llevarlos al portapapeles.",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "color": {
+      "type": "string",
+      "title": "Color",
+      "description": "Color de la franja (nombre de color de terminal, como yellow, o un hex como #fbbf24).",
+      "default": "yellow"
+    }
+  }
+}

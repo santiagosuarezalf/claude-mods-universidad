@@ -21,6 +21,13 @@
       "description": "Frena entregas finales mal nombradas o fuera de su carpeta de corte en Entregables/.",
       "version": "0.1.0",
       "category": "productivity"
+    },
+    {
+      "name": "copiables",
+      "source": "./plugins/copiables",
+      "description": "Textos 📋 de la última respuesta en una franja sobre el prompt, y /copiar N para llevarlos al portapapeles.",
+      "version": "0.1.0",
+      "category": "productivity"
     }
   ]
 }

@@ -1,6 +1,6 @@
 # claude-mods-universidad
 
-Dos mods de [Claude Code](https://claude.com/claude-code) para llevar la universidad desde la terminal.
+Tres mods de [Claude Code](https://claude.com/claude-code) para llevar la universidad desde la terminal.
 Están pensados para una carpeta de carrera organizada por semestre, materia y corte (abajo se explica la estructura).
 
 ## carrera
@@ -54,6 +54,30 @@ sin revisión. Si el guardián falla por algún motivo, deja pasar el archivo en
 |---|---|---|
 | `codigo` | *(vacío)* | Tu código de estudiante. Vacío: solo revisa la carpeta |
 
+## copiables
+
+Cuando Claude te entrega textos para pegar en otro lado (un correo, un foro, un mensaje), cada uno va en
+un bloque de código con un título que empieza por 📋:
+
+````
+📋 **Versión 1 — corta**
+
+```text
+El texto que se pega.
+```
+````
+
+Al terminar la respuesta aparece una franja encima del prompt con los textos numerados y el comienzo de
+cada uno, y `/copiar N` copia el número N al portapapeles, sin la barra `│` ni los saltos de línea de la
+terminal (con un solo texto basta `/copiar`). Una respuesta nueva sin textos 📋 quita la franja. `/copy`
+sigue funcionando igual.
+
+Para que Claude entregue los textos así, pídeselo una vez y que lo guarde en su memoria o en tu `CLAUDE.md`.
+
+| Opción | Por defecto | Qué es |
+|---|---|---|
+| `color` | `yellow` | Color de la franja (nombre de color de terminal o un hex) |
+
 ## Instalar
 
 En una sesión de Claude Code:
@@ -61,6 +85,7 @@ En una sesión de Claude Code:
 ```
 /plugin install carrera --marketplace santiagosuarezalf/claude-mods-universidad
 /plugin install guardian-entregables --marketplace santiagosuarezalf/claude-mods-universidad
+/plugin install copiables --marketplace santiagosuarezalf/claude-mods-universidad
 ```
 
 Desde una terminal:
@@ -68,6 +93,7 @@ Desde una terminal:
 ```
 claude plugin install carrera --marketplace santiagosuarezalf/claude-mods-universidad
 claude plugin install guardian-entregables --marketplace santiagosuarezalf/claude-mods-universidad
+claude plugin install copiables --marketplace santiagosuarezalf/claude-mods-universidad
 ```
 
 Responde `y` para agregar el marketplace y elige el alcance (usuario). Las opciones se cambian con
