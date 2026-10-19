@@ -362,9 +362,16 @@ export const register: Register = (on, options) => {
 
     const otros = await next(e)
     const { Box, Text } = $.ui.resolve(e)
+    // Con espacio, entregas a la izquierda y evaluaciones a la derecha, en los mismos renglones;
+    // en una terminal angosta, una lista debajo de la otra como antes.
+    const dosColumnas = e.props.bodyColumns >= 110 && abiertas.length > 0 && examenes.length > 0
+    const mitad = Math.floor((e.props.bodyColumns - 2) / 2)
     const ancho = Math.max(20, e.props.bodyColumns - 40)
+    // En dos columnas cada título cabe en su mitad, descontando lo que va antes y después de él.
+    const anchoVentana = dosColumnas ? Math.max(16, mitad - 34) : ancho
+    const anchoExamen = dosColumnas ? Math.max(16, mitad - 26) : ancho
     const renglonVentana = (v: (typeof abiertas)[number]) => {
-      const titulo = recortar(v.titulo, ancho)
+      const titulo = recortar(v.titulo, anchoVentana)
       if (v.tipo === 'cierra') return <Text color="error">🔴 HOY cierra {titulo} (23:59) · sin ✅</Text>
       if (v.tipo === 'abrio') {
         const dias = diasHasta(v.cierra, ahora)
@@ -377,26 +384,40 @@ export const register: Register = (on, options) => {
       return <Text color={NARANJA}>📬 {titulo} sigue sin ✅ · cierra en {restante(v.cierra - ahora)}</Text>
     }
     const renglonExamen = (x: (typeof examenes)[number]) => {
-      const titulo = recortar(x.titulo, ancho)
+      const titulo = recortar(x.titulo, anchoExamen)
       const dias = diasHasta(x.cierra, ahora)
       if (dias === 0) return <Text bold color={VIOLETA}>📖 HOY: {titulo}</Text>
       if (dias === 1) return <Text color={VIOLETA}>📖 Mañana: {titulo}</Text>
       return <Text color={VIOLETA}>📖 {titulo} · {fechaCorta(x.cierra)} (en {dias} días)</Text>
     }
+    const listaVentanas = [
+      ...abiertas.slice(0, MAX_VENTANAS).map(renglonVentana),
+      abiertas.length > MAX_VENTANAS
+        ? <Text dimColor>   … y {abiertas.length - MAX_VENTANAS} más abiertas</Text>
+        : null,
+    ]
+    const listaExamenes = [
+      ...examenes.slice(0, MAX_VENTANAS).map(renglonExamen),
+      examenes.length > MAX_VENTANAS
+        ? <Text dimColor>… y {examenes.length - MAX_VENTANAS} evaluaciones más</Text>
+        : null,
+    ]
     return (
       <Box flexDirection="column">
         {otros}
         {corteMal && c
           ? <Text color="error">⚠️ Por fecha ya es {c.esperado}: falta actualizar CORTE ACTIVO en el CLAUDE.md raíz.</Text>
           : null}
-        {abiertas.slice(0, MAX_VENTANAS).map(renglonVentana)}
-        {abiertas.length > MAX_VENTANAS
-          ? <Text dimColor>   … y {abiertas.length - MAX_VENTANAS} más abiertas</Text>
+        {dosColumnas
+          ? (
+            <Box flexDirection="row" justifyContent="space-between">
+              <Box flexDirection="column" width={mitad}>{listaVentanas}</Box>
+              <Box flexDirection="column" width={mitad} alignItems="flex-end">{listaExamenes}</Box>
+            </Box>
+            )
           : null}
-        {examenes.slice(0, MAX_VENTANAS).map(renglonExamen)}
-        {examenes.length > MAX_VENTANAS
-          ? <Text dimColor>   … y {examenes.length - MAX_VENTANAS} evaluaciones más</Text>
-          : null}
+        {dosColumnas ? null : listaVentanas}
+        {dosColumnas ? null : listaExamenes}
         {enCurso
           ? (
             <Text>

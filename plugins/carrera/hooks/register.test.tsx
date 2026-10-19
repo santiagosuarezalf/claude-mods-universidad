@@ -195,9 +195,61 @@ test('parciales, sustentaciones y exámenes salen en la banda con 📖, aparte d
   await m.clock.advance(100)
   const texto = (await (await bandaCarrera($)).find({ type: 'Box' }))?.text ?? ''
   expect(texto).toContain('📖 HOY: Examen hoy')
-  expect(texto).toContain('📖 Mañana: PARCIAL Corte II — Teoría de la Computación (AVA, 18:00–20:00)')
+  expect(texto).toContain('📖 Mañana: PARCIAL Corte II — Teoría de la Computación')
   expect(texto).toContain('📖 Sustentación proyecto · jue 22 oct (en 4 días)')
   expect(texto).not.toContain('ya presentado')
   // Las entregas 📬 van primero, los 📖 después
+  expect(texto.indexOf('📬 Taller final')).toBeLessThan(texto.indexOf('📖'))
+})
+
+type Nodo = { type?: string; text?: string; props?: { flexDirection?: string; alignItems?: string }; children?: unknown[] }
+/** La caja en fila (las dos columnas) dentro del árbol dibujado, si la hay. */
+function filaDeDos (n: unknown): Nodo | undefined {
+  if (!n || typeof n !== 'object') return undefined
+  const nodo = n as Nodo
+  if (nodo.type === 'Box' && nodo.props?.flexDirection === 'row') return nodo
+  for (const h of nodo.children ?? []) {
+    const f = filaDeDos(h)
+    if (f) return f
+  }
+  return undefined
+}
+
+test('con entregas y evaluaciones, van en dos columnas: 📬 a la izquierda y 📖 a la derecha', async ($, on) => {
+  const m = mundo(on)
+  m.store.eventos = [
+    { summary: 'PARCIAL Corte II — Teoría', start: { date: '2026-10-19' }, end: { date: '2026-10-20' } },
+    { summary: 'Taller final', description: '🪟 Abre: 2026-10-12', start: { date: '2026-10-19' }, end: { date: '2026-10-20' } },
+  ]
+  await abrir($)
+  await m.clock.advance(100)
+  const ui = await bandaCarrera($)
+  const fila = filaDeDos(await ui.find({ type: 'Box' }))
+  expect(fila).toBeDefined()
+  const [izq, der] = (fila?.children ?? []) as Nodo[]
+  const plano = (n: unknown): string =>
+    typeof n === 'string' ? n : ((n as Nodo)?.children ?? []).map(plano).join('')
+  expect(plano(izq)).toContain('📬 Taller final')
+  expect(plano(der)).toContain('📖 Mañana: PARCIAL Corte II')
+  expect(der?.props?.alignItems).toBe('flex-end')
+})
+
+test('en una terminal angosta siguen una debajo de la otra', async ($, on) => {
+  const m = mundo(on)
+  m.store.eventos = [
+    { summary: 'PARCIAL Corte II — Teoría', start: { date: '2026-10-19' }, end: { date: '2026-10-20' } },
+    { summary: 'Taller final', description: '🪟 Abre: 2026-10-12', start: { date: '2026-10-19' }, end: { date: '2026-10-20' } },
+  ]
+  await abrir($)
+  await m.clock.advance(100)
+  const ui = await $.ui.mount({
+    plugin: 'carrera',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, bodyColumns: 90 } as never,
+    viewport: { columns: 100, rows: 40 },
+  })
+  expect(filaDeDos(await ui.find({ type: 'Box' }))).toBeUndefined()
+  const texto = (await ui.find({ type: 'Box' }))?.text ?? ''
   expect(texto.indexOf('📬 Taller final')).toBeLessThan(texto.indexOf('📖'))
 })

@@ -1,6 +1,6 @@
 {
   "name": "carrera",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Tu semestre dentro de Claude Code: próxima entrega en el pie, banda con corte/semana/promedio y temporizador de bloques ✍️, leyendo tu Google Calendar.",
   "types": "./types/index.d.ts",
   "userConfig": {
