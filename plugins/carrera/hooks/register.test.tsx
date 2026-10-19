@@ -90,6 +90,9 @@ test('si hay una pista del engine, la conserva delante', async ($, on) => {
   await abrir($)
   const ui = await pie($, 'esc to interrupt')
   expect(await texto(ui)).toContain('esc to interrupt')
+  // El engine rechaza su línea bajo un Box con `width` («engine node under a Box with prop "width"»)
+  const raiz = await ui.drawn() as unknown as { props: { width?: number } }
+  expect(raiz.props.width).toBeUndefined()
 })
 
 test('con letreros largos del engine, la pieza baja a un renglón propio y no se esconde', async ($, on) => {

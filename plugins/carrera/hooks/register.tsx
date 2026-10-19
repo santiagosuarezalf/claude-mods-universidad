@@ -320,11 +320,20 @@ export const register: Register = (on, options) => {
         </Box>
       )
     }
+    if (!conPista) {
+      return (
+        <Box flexDirection="row" width={columnas}>
+          <Text wrap="truncate-end">{pieza}</Text>
+        </Box>
+      )
+    }
+    // El engine no acepta su línea bajo un Box con `width`: el ancho fijo va solo en la caja de la pieza,
+    // con lo que deja la pista, y así el total sigue siendo `columnas`.
     return (
-      <Box flexDirection="row" width={columnas}>
-        {conPista ? <Box flexShrink={0}>{linea}</Box> : null}
-        {conPista ? <Text dimColor> · </Text> : null}
-        <Box flexGrow={1} flexShrink={1}>
+      <Box flexDirection="row">
+        <Box flexShrink={0}>{linea}</Box>
+        <Text dimColor> · </Text>
+        <Box width={columnas - e.props.hint.trim().length - 3}>
           <Text wrap="truncate-end">{pieza}</Text>
         </Box>
       </Box>
