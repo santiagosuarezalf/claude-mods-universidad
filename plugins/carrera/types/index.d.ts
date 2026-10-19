@@ -16,6 +16,8 @@ export type Meta = {
   ponderado: boolean
 }
 export type Bloque = { titulo: string; inicio: number; fin: number }
+/** Un evento con hora de cualquier calendario, con el color con que Google Calendar lo pinta. */
+export type Evento = { titulo: string; calendario: string; color: string | null; inicio: number; fin: number }
 export type Contexto = {
   semestre: string
   corte: string
@@ -30,6 +32,7 @@ declare module 'claude-code' {
     carrera: {
       entregas: Entrega[]
       bloques: Bloque[]
+      agenda: Evento[]
       semana: number | null
       contexto: Contexto | null
       beca: Beca | null

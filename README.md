@@ -25,8 +25,14 @@ cuando hace falta:
   día que abre (amarillo), desde la mitad de la ventana si sigue sin ✅ (naranja) y el día que cierra
   (rojo, con notificación). Muestra las 3 que cierran primero y cuenta el resto. El evento sigue siendo
   de un solo día: la ventana va en la descripción;
+- **📖 parciales, sustentaciones y exámenes** de los próximos 7 días, en violeta. Con espacio (≥ 110
+  columnas) van en una columna a la derecha y las entregas 📬 a la izquierda, en los mismos renglones;
+- **el evento en curso de cualquier calendario**, al final de la columna derecha, con una barra del color
+  de su calendario: `🏋️ Gym  ━━━━━──── 35m de 1h 30m · quedan 55m`. Necesita un servidor MCP llamado
+  `gcal-extended` con una herramienta `list_timed_events` que devuelva `{ events: [{ summary, calendar,
+  color, start, end }] }`; sin él, simplemente no aparece;
 - **✍️ el bloque de trabajo en curso** (los eventos con hora que empiezan por ✍️ avisan al arrancar y
-  muestran cuánto queda).
+  llevan una barra con el tiempo hecho, el total y cuánto queda).
 
 **`/notas`** muestra la tabla de `NOTAS.md` por materia: lo que lleva, el máximo al que todavía puede
 llegar (⚠️ si ya no alcanza la meta) y cuánto falta para la meta del promedio.

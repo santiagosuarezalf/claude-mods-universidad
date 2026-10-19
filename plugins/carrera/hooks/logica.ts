@@ -1,5 +1,5 @@
 // Lógica pura del mod: leer el calendario, la tabla de cortes y las notas. Sin `$`, para poder probarla.
-import type { Beca, Bloque, Contexto, Entrega, MateriaNota, Meta, Ventana } from '../types'
+import type { Evento, Beca, Bloque, Contexto, Entrega, MateriaNota, Meta, Ventana } from '../types'
 
 let desfaseHoras = -5 // UTC−5 por defecto; el mod lo ajusta con la opción `utcOffset`
 
@@ -353,4 +353,40 @@ export function tablaNotas (m: Meta, b: Beca | null, meta: number) {
   lineas.push('', fraseMeta(m, meta).replace(' · máximo posible', '.\n   Máximo posible si sacas todo perfecto:') + '.')
   if (!m.ponderado) lineas.push('   ≈ Sin ponderar: faltan los créditos de cada materia en NOTAS.md.')
   return lineas.join('\n')
+}
+
+/** Los eventos de `list_timed_events` (conector gcal-extended): todos los calendarios, con su color. */
+export function leerAgenda (resultado: { content: readonly unknown[] }): Evento[] {
+  for (const c of resultado.content) {
+    try {
+      const datos = JSON.parse(String((c as { text?: unknown }).text ?? '')) as { events?: unknown[] }
+      if (!Array.isArray(datos.events)) continue
+      return datos.events.flatMap(x => {
+        const e = x as { summary?: string; calendar?: string; color?: string | null; start?: string; end?: string }
+        const inicio = Date.parse(e.start ?? '')
+        const fin = Date.parse(e.end ?? '')
+        if (Number.isNaN(inicio) || Number.isNaN(fin)) return []
+        return [{ titulo: e.summary ?? '', calendario: e.calendar ?? '', color: e.color ?? null, inicio, fin }]
+      })
+    } catch {
+      // un bloque que no es JSON: se sigue con el siguiente
+    }
+  }
+  return []
+}
+
+/** Lo que está pasando ahora, sin los bloques ✍️ (que tienen su propia barra), el que termina primero arriba. */
+export function enCurso (agenda: readonly Evento[], ahora: number): Evento[] {
+  return agenda
+    .filter(e => e.inicio <= ahora && ahora < e.fin && !e.titulo.trim().startsWith('✍️'))
+    .sort((a, b) => a.fin - b.fin)
+}
+
+/** Un emoji por calendario, para reconocerlo de un vistazo; el resto lleva ⏱️. */
+export function iconoCalendario (nombre: string): string {
+  const iconos: Record<string, string> = {
+    university: '🎓', work: '💼', 'work at home': '💼', gym: '🏋️', english: '🗣️', programming: '💻',
+    'fl studio': '🎹', books: '📚', church: '⛪', family: '👪', outings: '🎉', appointment: '🩺',
+  }
+  return iconos[nombre.trim().toLowerCase()] ?? '⏱️'
 }

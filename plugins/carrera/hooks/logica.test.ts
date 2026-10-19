@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { beca, clasificar, contexto, cuantoFalta, evaluaciones, fechaCorta, fraseMeta, restante, tablaNotas, ventanas } from './logica'
+import { beca, clasificar, enCurso, iconoCalendario, leerAgenda, contexto, cuantoFalta, evaluaciones, fechaCorta, fraseMeta, restante, tablaNotas, ventanas } from './logica'
 
 const AHORA = Date.parse('2026-10-18T15:00:00-05:00') // un domingo a las 3 p. m., UTC−5
 
@@ -197,4 +197,24 @@ describe('fraseMeta y tablaNotas', () => {
     expect(t).toContain('Máximo posible si sacas todo perfecto: 9,50.')
     expect(t).toContain('Sin ponderar')
   })
+})
+
+test('enCurso deja solo lo que está pasando, sin los ✍️, y el que termina primero arriba', () => {
+  const a = { titulo: 'Clase', calendario: 'University', color: '#4ca8df', inicio: 0, fin: 100 }
+  const b = { titulo: 'Gym', calendario: 'Gym', color: '#fd7941', inicio: 10, fin: 50 }
+  const c = { titulo: '✍️ Hacer: algo', calendario: 'University', color: null, inicio: 0, fin: 100 }
+  const d = { titulo: 'Después', calendario: 'Books', color: null, inicio: 200, fin: 300 }
+  expect(enCurso([a, b, c, d], 20).map(x => x.titulo)).toEqual(['Gym', 'Clase'])
+})
+
+test('leerAgenda lee la respuesta de gcal-extended y descarta fechas rotas', () => {
+  const r = { content: [{ type: 'text', text: JSON.stringify({ events: [
+    { summary: 'Gym', calendar: 'Gym', color: '#fd7941', start: '2026-10-18T14:30:00-05:00', end: '2026-10-18T16:00:00-05:00' },
+    { summary: 'Roto', calendar: 'X', start: 'nada', end: 'nada' },
+  ] }) }] }
+  const ev = leerAgenda(r)
+  expect(ev.length).toBe(1)
+  expect(ev[0].color).toBe('#fd7941')
+  expect(iconoCalendario('Gym')).toBe('🏋️')
+  expect(iconoCalendario('Otro')).toBe('⏱️')
 })

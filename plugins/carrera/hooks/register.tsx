@@ -1,14 +1,16 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Beca, Bloque, Contexto, Entrega, Meta } from '../types'
-import { barra,
+import type { Beca, Bloque, Contexto, Entrega, Evento, Meta } from '../types'
+import { barra, enCurso as eventosEnCurso, iconoCalendario, leerAgenda,
   beca, clasificar, coma, contexto, cuantoFalta, diasHasta, evaluaciones, fechaCorta, fechaLocal, fraseMeta, leerEventos, punteros, recortar, restante,
   tablaNotas, usarZona, ventanas,
 } from './logica'
 
 const entregas = atom({ plugin: 'carrera', key: 'entregas' } as const, [] as Entrega[])
 const bloques = atom({ plugin: 'carrera', key: 'bloques' } as const, [] as Bloque[])
+/** Los eventos con hora de todos los calendarios (gcal-extended), para la barra del evento en curso. */
+const agenda = atom({ plugin: 'carrera', key: 'agenda' } as const, [] as Evento[])
 const semana = atom({ plugin: 'carrera', key: 'semana' } as const, null as number | null)
 const ctx = atom({ plugin: 'carrera', key: 'contexto' } as const, null as Contexto | null)
 const notas = atom({ plugin: 'carrera', key: 'beca' } as const, null as Beca | null)
@@ -18,6 +20,10 @@ const vista = atom({ plugin: 'carrera', key: 'vista' } as const, 0)
 const cargado = atom({ plugin: 'carrera', key: 'cargado' } as const, false)
 
 const CALENDARIO = 'claude.ai Google Calendar'
+/** El conector propio, que lee todos los calendarios con sus colores. */
+const AGENDA = 'gcal-extended'
+/** Eventos en curso que se muestran a la vez con su barra. */
+const MAX_EN_CURSO = 2
 const CADA_CALENDARIO_MS = 10 * 60_000
 const CADA_MINUTO_MS = 60_000
 const ROTAR_MS = 5000
@@ -150,6 +156,13 @@ async function leerCalendario ($: EngineInterface, nombre: string) {
   await aplicar($, eventos)
 }
 
+/** Los eventos con hora de las próximas horas en todos los calendarios. Si el conector falla, se deja lo que había. */
+async function leerTodos ($: EngineInterface) {
+  const r = await $.mcp.call(AGENDA, 'list_timed_events', { hoursBack: 12, hoursAhead: 12 })
+  if (r.isError) return
+  await update($, agenda, () => leerAgenda(r))
+}
+
 async function aplicar ($: EngineInterface, eventos: ReturnType<typeof leerEventos>) {
   const c = clasificar(eventos, await $.clock.now())
   await update($, entregas, () => c.entregas)
@@ -191,6 +204,8 @@ async function iniciar ($: EngineInterface) {
   $.clock.after(ESPERA_INICIAL_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
 
   $.clock.every(CADA_CALENDARIO_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
+  $.clock.after(ESPERA_INICIAL_MS, () => { void leerTodos($).catch(() => undefined) })
+  $.clock.every(CADA_CALENDARIO_MS, () => { void leerTodos($).catch(() => undefined) })
   $.clock.every(ROTAR_MS, () => { void update($, vista, n => n + 1) })
   $.clock.every(CADA_MINUTO_MS, async () => {
     await update($, tick, n => n + 1)
@@ -358,13 +373,14 @@ export const register: Register = (on, options) => {
     const enCurso = (await read($, bloques)).find(x => x.inicio <= ahora && ahora < x.fin)
     const abiertas = ventanas(await read($, entregas), ahora)
     const examenes = evaluaciones(await read($, entregas), ahora, DIAS_EVALUACION)
-    if (!corteMal && !enCurso && abiertas.length === 0 && examenes.length === 0) return next(e)
+    const actuales = eventosEnCurso(await read($, agenda), ahora).slice(0, MAX_EN_CURSO)
+    if (!corteMal && !enCurso && abiertas.length === 0 && examenes.length === 0 && actuales.length === 0) return next(e)
 
     const otros = await next(e)
     const { Box, Text } = $.ui.resolve(e)
     // Con espacio, entregas a la izquierda y evaluaciones a la derecha, en los mismos renglones;
     // en una terminal angosta, una lista debajo de la otra como antes.
-    const dosColumnas = e.props.bodyColumns >= 110 && abiertas.length > 0 && examenes.length > 0
+    const dosColumnas = e.props.bodyColumns >= 110 && examenes.length + actuales.length > 0
     const mitad = Math.floor((e.props.bodyColumns - 2) / 2)
     const ancho = Math.max(20, e.props.bodyColumns - 40)
     // En dos columnas cada título cabe en su mitad, descontando lo que va antes y después de él.
@@ -394,6 +410,17 @@ export const register: Register = (on, options) => {
     const progreso = enCurso
       ? barra((ahora - enCurso.inicio) / (enCurso.fin - enCurso.inicio))
       : barra(0)
+    // El evento en curso de cualquier calendario, con la barra del color de su calendario.
+    const renglonActual = (x: Evento) => {
+      const color = x.color ?? 'claude'
+      const b = barra((ahora - x.inicio) / (x.fin - x.inicio), 14)
+      return (
+        <Text>
+          <Text color={color}>{iconoCalendario(x.calendario)} {recortar(x.titulo, dosColumnas ? Math.max(14, mitad - 52) : ancho)}  {b.llena}</Text>
+          <Text dimColor>{b.vacia}  {restante(ahora - x.inicio)} de {restante(x.fin - x.inicio)} · quedan {restante(x.fin - ahora)}</Text>
+        </Text>
+      )
+    }
     const listaVentanas = [
       ...abiertas.slice(0, MAX_VENTANAS).map(renglonVentana),
       abiertas.length > MAX_VENTANAS
@@ -405,6 +432,7 @@ export const register: Register = (on, options) => {
       examenes.length > MAX_VENTANAS
         ? <Text dimColor>… y {examenes.length - MAX_VENTANAS} evaluaciones más</Text>
         : null,
+      ...actuales.map(renglonActual),
     ]
     return (
       <Box flexDirection="column">

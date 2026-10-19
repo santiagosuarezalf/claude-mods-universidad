@@ -15,7 +15,7 @@ const EVENTOS = [
 ]
 
 /** Lo que está debajo del mod: reloj, store con eventos guardados, archivos de la carrera y el engine. */
-function mundo (on: On) {
+function mundo (on: On, agenda?: unknown[]) {
   const clock = mock.clock(on, { now: AHORA })
   const store: Record<string, unknown> = { eventos: EVENTOS }
   on('store.get', ($, e) => ({ value: store[e.key] }))
@@ -32,7 +32,13 @@ function mundo (on: On) {
     const ruta = (e as { path: string }).path
     return (ruta in archivos ? { value: archivos[ruta] } : { deny: 'no existe' }) as never
   })
-  on('mcp.call', () => ({ value: { isError: true, content: [] } }) as never)
+  on('mcp.call', ($, e) => {
+    const llamada = e as { server: string; tool: string }
+    if (llamada.server === 'gcal-extended' && llamada.tool === 'list_timed_events' && agenda) {
+      return { value: { isError: false, content: [{ type: 'text', text: JSON.stringify({ events: agenda }) }] } } as never
+    }
+    return { value: { isError: true, content: [] } } as never
+  })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('ui.render', ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
@@ -262,4 +268,29 @@ test('el bloque ✍️ en curso lleva una barra de lo que ya pasó, con el tiemp
   expect(texto).toContain('✍️ ajedrez funcional')
   expect(texto).toMatch(/━*─+/)
   expect(texto).toMatch(/de 5h 0m · quedan/)
+})
+
+test('el evento en curso de cualquier calendario sale a la derecha, con barra del color de su calendario', async ($, on) => {
+  const m = mundo(on, [
+    { summary: 'Rutina de pierna', calendar: 'Gym', color: '#fd7941', start: '2026-10-18T14:30:00-05:00', end: '2026-10-18T16:00:00-05:00' },
+    { summary: '✍️ Hacer: ajedrez funcional', calendar: 'University', color: '#4ca8df', start: '2026-10-18T13:00:00-05:00', end: '2026-10-18T18:00:00-05:00' },
+    { summary: 'Más tarde', calendar: 'Books', color: '#4ca8df', start: '2026-10-18T19:00:00-05:00', end: '2026-10-18T20:00:00-05:00' },
+  ])
+  await abrir($)
+  await m.clock.advance(6000)
+  const ui = await bandaCarrera($)
+  const fila = filaDeDos(await ui.find({ type: 'Box' }))
+  expect(fila).toBeDefined()
+  const der = ((fila?.children ?? []) as Nodo[])[1]
+  const plano = (n: unknown): string =>
+    typeof n === 'string' ? n : ((n as Nodo)?.children ?? []).map(plano).join('')
+  const t = plano(der)
+  expect(t).toContain('🏋️ Rutina de pierna')
+  expect(t).toContain('30m de 1h 30m · quedan 1h 0m')
+  // El ✍️ no se repite a la derecha y lo que todavía no empieza no sale
+  expect(t).not.toContain('ajedrez')
+  expect(t).not.toContain('Más tarde')
+  // La barra va del color del calendario
+  const pintado = JSON.stringify(der)
+  expect(pintado).toContain('#fd7941')
 })
