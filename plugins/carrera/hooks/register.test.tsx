@@ -181,3 +181,23 @@ test('/notas responde con la tabla por materia y cuánto falta', async ($, on) =
   expect(r.text).toContain('DPOO')
   expect(r.text).toContain('🎯 Para 9,3')
 })
+
+test('parciales, sustentaciones y exámenes salen en la banda con 📖, aparte de las entregas 📬', async ($, on) => {
+  const m = mundo(on)
+  m.store.eventos = [
+    { summary: 'PARCIAL Corte II — Teoría de la Computación (AVA, 18:00–20:00)', start: { date: '2026-10-19' }, end: { date: '2026-10-20' } },
+    { summary: 'Sustentación proyecto', start: { date: '2026-10-22' }, end: { date: '2026-10-23' } },
+    { summary: 'Examen hoy', start: { date: '2026-10-18' }, end: { date: '2026-10-19' } },
+    { summary: '✅ Parcial ya presentado', start: { date: '2026-10-20' }, end: { date: '2026-10-21' } },
+    { summary: 'Taller final', description: '🪟 Abre: 2026-10-12', start: { date: '2026-10-19' }, end: { date: '2026-10-20' } },
+  ]
+  await abrir($)
+  await m.clock.advance(100)
+  const texto = (await (await bandaCarrera($)).find({ type: 'Box' }))?.text ?? ''
+  expect(texto).toContain('📖 HOY: Examen hoy')
+  expect(texto).toContain('📖 Mañana: PARCIAL Corte II — Teoría de la Computación (AVA, 18:00–20:00)')
+  expect(texto).toContain('📖 Sustentación proyecto · jue 22 oct (en 4 días)')
+  expect(texto).not.toContain('ya presentado')
+  // Las entregas 📬 van primero, los 📖 después
+  expect(texto.indexOf('📬 Taller final')).toBeLessThan(texto.indexOf('📖'))
+})

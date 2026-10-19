@@ -144,6 +144,18 @@ export function ventanas (entregas: readonly Entrega[], ahora: number): Ventana[
   return lista.sort((a, b) => a.cierra - b.cierra)
 }
 
+const EVALUACION = /\b(parcial|sustentaci[oó]n|examen)/i
+
+/**
+ * Parciales, sustentaciones y exámenes sin ✅ de los próximos `dias` días (hoy incluido), del más cercano
+ * al último. Van aparte de las ventanas: por convención no traen «🪟 Abre:».
+ */
+export function evaluaciones (entregas: readonly Entrega[], ahora: number, dias = 7): Entrega[] {
+  return entregas
+    .filter(e => e.abre === null && e.cierra > ahora && EVALUACION.test(e.titulo) && diasHasta(e.cierra, ahora) <= dias)
+    .sort((a, b) => a.cierra - b.cierra)
+}
+
 /** Lo que dicen los punteros del CLAUDE.md raíz. */
 export function punteros (md: string) {
   const semestre = /SEMESTRE ACTIVO: `([^`]+)`/.exec(md)?.[1]

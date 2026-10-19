@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Beca, Bloque, Contexto, Entrega, Meta } from '../types'
 import {
-  beca, clasificar, coma, contexto, cuantoFalta, diasHasta, fechaCorta, fechaLocal, fraseMeta, leerEventos, punteros, recortar, restante,
+  beca, clasificar, coma, contexto, cuantoFalta, diasHasta, evaluaciones, fechaCorta, fechaLocal, fraseMeta, leerEventos, punteros, recortar, restante,
   tablaNotas, usarZona, ventanas,
 } from './logica'
 
@@ -37,6 +37,10 @@ const HORA = 3600_000
  */
 const MAX_VENTANAS = 3
 const NARANJA = '#ff8700'
+/** Parciales, sustentaciones y exámenes: otro color, para no confundirlos con las entregas 📬. */
+const VIOLETA = '#af87ff'
+/** Días hacia adelante en que se avisa un parcial, sustentación o examen. */
+const DIAS_EVALUACION = 7
 
 /** La carpeta raíz de la carrera: la del CLAUDE.md que tiene los punteros, de aquí hacia arriba. */
 async function raiz ($: EngineInterface) {
@@ -341,7 +345,8 @@ export const register: Register = (on, options) => {
   })
 
   // Sobre el prompt, solo cuando hace falta: el corte desactualizado, las ventanas «🪟» que toca avisar
-  // (las 3 que cierran primero) y el bloque ✍️ en curso.
+  // (las 3 que cierran primero), los parciales/sustentaciones/exámenes de la semana (📖, en violeta)
+  // y el bloque ✍️ en curso.
   // Lo que dibujan otros mods ahí (la English note de ingles, la fila de image-preview) va primero,
   // encima de estos avisos: así el orden no depende de qué mod cargó antes.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -352,7 +357,8 @@ export const register: Register = (on, options) => {
     const corteMal = c !== null && c.esperado !== null && c.esperado !== c.corte
     const enCurso = (await read($, bloques)).find(x => x.inicio <= ahora && ahora < x.fin)
     const abiertas = ventanas(await read($, entregas), ahora)
-    if (!corteMal && !enCurso && abiertas.length === 0) return next(e)
+    const examenes = evaluaciones(await read($, entregas), ahora, DIAS_EVALUACION)
+    if (!corteMal && !enCurso && abiertas.length === 0 && examenes.length === 0) return next(e)
 
     const otros = await next(e)
     const { Box, Text } = $.ui.resolve(e)
@@ -370,6 +376,13 @@ export const register: Register = (on, options) => {
       }
       return <Text color={NARANJA}>📬 {titulo} sigue sin ✅ · cierra en {restante(v.cierra - ahora)}</Text>
     }
+    const renglonExamen = (x: (typeof examenes)[number]) => {
+      const titulo = recortar(x.titulo, ancho)
+      const dias = diasHasta(x.cierra, ahora)
+      if (dias === 0) return <Text bold color={VIOLETA}>📖 HOY: {titulo}</Text>
+      if (dias === 1) return <Text color={VIOLETA}>📖 Mañana: {titulo}</Text>
+      return <Text color={VIOLETA}>📖 {titulo} · {fechaCorta(x.cierra)} (en {dias} días)</Text>
+    }
     return (
       <Box flexDirection="column">
         {otros}
@@ -379,6 +392,10 @@ export const register: Register = (on, options) => {
         {abiertas.slice(0, MAX_VENTANAS).map(renglonVentana)}
         {abiertas.length > MAX_VENTANAS
           ? <Text dimColor>   … y {abiertas.length - MAX_VENTANAS} más abiertas</Text>
+          : null}
+        {examenes.slice(0, MAX_VENTANAS).map(renglonExamen)}
+        {examenes.length > MAX_VENTANAS
+          ? <Text dimColor>   … y {examenes.length - MAX_VENTANAS} evaluaciones más</Text>
           : null}
         {enCurso
           ? (

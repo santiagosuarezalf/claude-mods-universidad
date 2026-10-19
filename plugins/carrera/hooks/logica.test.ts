@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { beca, clasificar, contexto, cuantoFalta, fechaCorta, fraseMeta, restante, tablaNotas, ventanas } from './logica'
+import { beca, clasificar, contexto, cuantoFalta, evaluaciones, fechaCorta, fraseMeta, restante, tablaNotas, ventanas } from './logica'
 
 const AHORA = Date.parse('2026-10-18T15:00:00-05:00') // un domingo a las 3 p. m., UTC−5
 
@@ -86,6 +86,20 @@ describe('ventanas', () => {
 
 /** Redondeo a 3 decimales, para comparar promedios sin ruido de coma flotante. */
 const r3 = (x: number | null | undefined) => (x == null ? x : Math.round(x * 1000) / 1000)
+
+describe('evaluaciones', () => {
+  const cierre = (f: string) => Date.parse(`${f}T23:59:59-05:00`)
+  test('parciales, sustentaciones y exámenes de los próximos 7 días, aparte de las ventanas', async () => {
+    const lista = evaluaciones([
+      { titulo: 'Sustentación proyecto', cierra: cierre('2026-10-23'), abre: null },
+      { titulo: 'PARCIAL Corte II — Teoría de la Computación', cierra: cierre('2026-10-19'), abre: null },
+      { titulo: 'Examen final', cierra: cierre('2026-10-30'), abre: null }, // a más de 7 días
+      { titulo: 'Taller 4', cierra: cierre('2026-10-20'), abre: null }, // no es evaluación
+      { titulo: 'Quiz parcial U3', cierra: cierre('2026-10-21'), abre: cierre('2026-10-10') }, // tiene 🪟: va con las ventanas
+    ], AHORA)
+    expect(lista.map(x => x.titulo)).toEqual(['PARCIAL Corte II — Teoría de la Computación', 'Sustentación proyecto'])
+  })
+})
 
 describe('cuantoFalta', () => {
   // Las notas reales al 18 oct 2026: corte I de todas y el corte II de Álgebra
