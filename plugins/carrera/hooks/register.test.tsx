@@ -18,6 +18,7 @@ const EVENTOS = [
 function mundo (on: On, agenda?: unknown[]) {
   const clock = mock.clock(on, { now: AHORA })
   const store: Record<string, unknown> = { eventos: EVENTOS }
+  const llamadas: string[] = []
   on('store.get', ($, e) => ({ value: store[e.key] }))
   on('store.set', ($, e) => {
     store[e.key] = JSON.parse(JSON.stringify(e.value))
@@ -34,17 +35,19 @@ function mundo (on: On, agenda?: unknown[]) {
   })
   on('mcp.call', ($, e) => {
     const llamada = e as { server: string; tool: string }
+    llamadas.push(llamada.tool)
     if (llamada.server === 'gcal-extended' && llamada.tool === 'list_timed_events' && agenda) {
       return { value: { isError: false, content: [{ type: 'text', text: JSON.stringify({ events: agenda }) }] } } as never
     }
     return { value: { isError: true, content: [] } } as never
   })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('prompt.submit', ($, e) => ({ text: e.text }) as never)
   on('ui.render', ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     return 'hint' in e.props ? <Text>{e.props.hint}</Text> : <Box key="engine" />
   })
-  return { clock, store }
+  return { clock, store, llamadas }
 }
 
 const abrir = ($: Engine) => $.session.start({ cwd: RAIZ, surface: 'terminal', isInteractive: true })
@@ -310,4 +313,33 @@ test('sin nada en curso, a la derecha sale el próximo evento con su hora y cuá
   const t = plano(der)
   expect(t).toMatch(/⏭️ Próximo: 🎓 Introducción a la Teoría.* · 18:00 \(en 3h 0m\)/)
   expect(t).not.toContain('Leer')
+})
+
+test('sin escribir 30 min deja de leer el calendario, y el siguiente mensaje lo vuelve a leer', async ($, on) => {
+  const m = mundo(on)
+  await abrir($)
+  await m.clock.advance(6000)
+  expect(m.llamadas.length).toBeGreaterThan(0)
+  // Una hora sin escribir: a los 10 y 20 min sí lee, de los 30 en adelante ya no
+  await m.clock.advance(25 * 60_000)
+  const antesDePausa = m.llamadas.length
+  await m.clock.advance(60 * 60_000)
+  expect(m.llamadas.length).toBe(antesDePausa)
+  // Al volver a escribir se lee en ese mismo mensaje, y el reloj sigue mientras haya actividad
+  await $.prompt.submit({ text: 'volví' } as never)
+  await m.clock.advance(100)
+  const alVolver = m.llamadas.length
+  expect(alVolver).toBeGreaterThan(antesDePausa)
+  await m.clock.advance(10 * 60_000)
+  expect(m.llamadas.length).toBeGreaterThan(alVolver)
+})
+
+test('un mensaje con el calendario recién leído no lo vuelve a leer', async ($, on) => {
+  const m = mundo(on)
+  await abrir($)
+  await m.clock.advance(6000)
+  const antes = m.llamadas.length
+  await $.prompt.submit({ text: 'hola' } as never)
+  await m.clock.advance(100)
+  expect(m.llamadas.length).toBe(antes)
 })

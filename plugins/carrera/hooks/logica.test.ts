@@ -65,6 +65,18 @@ describe('ventanas', () => {
     expect(c.entregas.find(x => x.titulo === 'Taller sin ventana')?.abre).toBeNull()
   })
 
+  test('sin «🪟 Abre:», la ventana arranca el día en que se creó el evento (menos en las evaluaciones)', async () => {
+    const c = clasificar([
+      { summary: 'Entrega Taller CONIITI a mano', created: '2026-10-20T13:46:37Z', start: { date: '2026-10-22' }, end: { date: '2026-10-23' } },
+      { summary: 'Quiz U3', description: '🪟 Abre: 2026-10-15', created: '2026-10-20T13:46:37Z', start: { date: '2026-10-22' }, end: { date: '2026-10-23' } },
+      { summary: 'PARCIAL Corte II — DPOO', created: '2026-10-18T09:00:00Z', start: { date: '2026-10-22' }, end: { date: '2026-10-23' } },
+    ], en('2026-10-21'))
+    expect(c.entregas.find(x => x.titulo.startsWith('Entrega Taller'))?.abre).toBe(dia('2026-10-20'))
+    expect(c.entregas.find(x => x.titulo === 'Quiz U3')?.abre).toBe(dia('2026-10-15'))
+    expect(c.entregas.find(x => x.titulo.startsWith('PARCIAL'))?.abre).toBeNull()
+    expect(ventanas(c.entregas, en('2026-10-21', '14:00')).map(v => v.titulo).sort()).toEqual(['Entrega Taller CONIITI a mano', 'Quiz U3'])
+  })
+
   test('avisa el día que abre, calla hasta la mitad, insiste después y el último día', async () => {
     expect(ventanas([quiz], en('2026-11-08'))).toEqual([])
     expect(ventanas([quiz], en('2026-11-09')).map(v => v.tipo)).toEqual(['abrio'])

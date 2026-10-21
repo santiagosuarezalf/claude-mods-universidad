@@ -65,6 +65,8 @@ export type EventoCal = {
   status?: string
   transparency?: string
   availability?: string
+  /** Cuándo se creó el evento (ISO): la ventana de las entregas que no traen «🪟 Abre:». */
+  created?: string
   start?: FechaCal
   end?: FechaCal
 }
@@ -114,7 +116,10 @@ export function clasificar (eventos: readonly EventoCal[], ahora: number) {
       const informativo = ev.transparency === 'transparent' || ev.availability === 'AVAILABILITY_FREE'
       if (informativo || /^(✅|❌)/.test(titulo)) continue
       const cierra = finDelDia(sumarDias(finExclusivo, -1))
-      const abreTxt = /🪟\s*Abre:\s*(\d{4}-\d{2}-\d{2})/.exec(ev.description ?? '')?.[1]
+      // Sin «🪟 Abre:», la ventana arranca el día en que se creó el evento (cuando se supo de la entrega).
+      // Los parciales, sustentaciones y exámenes no llevan ventana: van en su propia lista.
+      const creado = ev.created && !EVALUACION.test(titulo) ? fechaLocal(Date.parse(ev.created)) : undefined
+      const abreTxt = /🪟\s*Abre:\s*(\d{4}-\d{2}-\d{2})/.exec(ev.description ?? '')?.[1] ?? creado
       const abre = abreTxt ? inicioDelDia(abreTxt) : null
       if (cierra > ahora) entregas.push({ titulo, cierra, abre })
       continue

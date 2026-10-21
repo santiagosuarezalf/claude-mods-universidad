@@ -147,7 +147,9 @@ async function leerCalendario ($: EngineInterface, nombre: string) {
   } as never)
   // Ante un fallo se conservan los eventos guardados y se reintenta en un minuto, no en diez.
   if (conError) {
-    $.clock.after(REINTENTO_MS, () => { void leerCalendario($, nombre).catch(() => undefined) })
+    $.clock.after(REINTENTO_MS, async () => {
+      if (await activo($)) void leerCalendario($, nombre).catch(() => undefined)
+    })
     return
   }
   await $.store.set('eventos', eventos as never)
@@ -186,6 +188,25 @@ let iniciado = false
 let nombreCal = 'University'
 let metaPromedio = 9.3
 const avisados = new Set<string>()
+/** Sin escribir durante este tiempo, el calendario deja de consultarse hasta el siguiente mensaje. */
+let pausaMs = 30 * 60_000
+let ultimaActividad = 0
+let ultimaConsulta = -Infinity
+
+/**
+ * Si Santiago escribió hace poco. Con el Mac dormido o la sesión olvidada no se consulta el calendario:
+ * esas llamadas se cuelgan y Claude Code las pasa a segundo plano, y cada aviso de vuelta gasta un turno.
+ */
+async function activo ($: EngineInterface) {
+  return (await $.clock.now()) - ultimaActividad < pausaMs
+}
+
+/** Lee los dos calendarios y anota cuándo, para no repetir la lectura en el siguiente mensaje. */
+async function refrescar ($: EngineInterface) {
+  ultimaConsulta = await $.clock.now()
+  void leerCalendario($, nombreCal).catch(() => undefined)
+  void leerTodos($).catch(() => undefined)
+}
 
 /**
  * Carga datos y prende los relojes una sola vez. Corre en session.start, y también en el primer
@@ -194,6 +215,7 @@ const avisados = new Set<string>()
 async function iniciar ($: EngineInterface) {
   if (iniciado) return
   iniciado = true
+  ultimaActividad = await $.clock.now()
   const guardados = await $.store.get('eventos')
   if (Array.isArray(guardados) && guardados.length > 0) {
     await update($, cargado, () => true)
@@ -201,11 +223,11 @@ async function iniciar ($: EngineInterface) {
   }
   void leerArchivos($).catch(() => undefined)
   // La primera lectura espera a que el conector termine de conectar al abrir la sesión.
-  $.clock.after(ESPERA_INICIAL_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
-
-  $.clock.every(CADA_CALENDARIO_MS, () => { void leerCalendario($, nombreCal).catch(() => undefined) })
-  $.clock.after(ESPERA_INICIAL_MS, () => { void leerTodos($).catch(() => undefined) })
-  $.clock.every(CADA_CALENDARIO_MS, () => { void leerTodos($).catch(() => undefined) })
+  $.clock.after(ESPERA_INICIAL_MS, () => refrescar($))
+  // Cada 10 min, pero solo mientras se esté escribiendo; al volver, el primer mensaje la reanuda.
+  $.clock.every(CADA_CALENDARIO_MS, async () => {
+    if (await activo($)) await refrescar($)
+  })
   $.clock.every(ROTAR_MS, () => { void update($, vista, n => n + 1) })
   $.clock.every(CADA_MINUTO_MS, async () => {
     await update($, tick, n => n + 1)
@@ -229,6 +251,7 @@ export const register: Register = (on, options) => {
   const meta = Number(options.metaPromedio ?? 9.3)
   metaPromedio = meta
   usarZona(Number(options.utcOffset ?? -5))
+  pausaMs = Number(options.pausaMinutos ?? 30) * 60_000
   on('session.start', async ($, e, next) => {
     await iniciar($)
     await $.command.register({ name: 'notas', description: 'Notas del semestre por materia y cuánto falta para la meta de promedio' })
@@ -243,8 +266,13 @@ export const register: Register = (on, options) => {
     return { text: m === null ? 'No encontré la tabla de NOTAS.md del semestre activo.' : tablaNotas(m, b, meta) }
   })
 
+  // Cada mensaje cuenta como actividad; si el calendario quedó viejo (p. ej. tras una pausa), se lee ya.
   on('prompt.submit', async ($, e, next) => {
+    const yaIniciado = iniciado
     void iniciar($).catch(() => undefined)
+    const ahora = await $.clock.now()
+    ultimaActividad = ahora
+    if (yaIniciado && ahora - ultimaConsulta >= CADA_CALENDARIO_MS) void refrescar($).catch(() => undefined)
     return next(e)
   })
 

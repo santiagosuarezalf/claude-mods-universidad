@@ -1,6 +1,6 @@
 {
   "name": "carrera",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Tu semestre dentro de Claude Code: próxima entrega en el pie, banda con corte/semana/promedio y temporizador de bloques ✍️, leyendo tu Google Calendar.",
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -21,6 +21,12 @@
       "title": "Desfase UTC",
       "description": "Horas respecto a UTC de tu zona horaria (Colombia: -5).",
       "default": -5
+    },
+    "pausaMinutos": {
+      "type": "number",
+      "title": "Pausa por inactividad (min)",
+      "description": "Si no escribes en este tiempo, el calendario deja de consultarse hasta tu siguiente mensaje.",
+      "default": 30
     }
   }
 }

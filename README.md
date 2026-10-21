@@ -24,7 +24,8 @@ cuando hace falta:
 - **📬 ventanas de entrega:** si la descripción del evento trae la línea `🪟 Abre: AAAA-MM-DD`, avisa el
   día que abre (amarillo), desde la mitad de la ventana si sigue sin ✅ (naranja) y el día que cierra
   (rojo, con notificación). Muestra las 3 que cierran primero y cuenta el resto. El evento sigue siendo
-  de un solo día: la ventana va en la descripción;
+  de un solo día: la ventana va en la descripción. Si no trae esa línea, la ventana arranca el día en que
+  se creó el evento;
 - **📖 parciales, sustentaciones y exámenes** de los próximos 7 días, en violeta. Con espacio (≥ 110
   columnas) van en una columna a la derecha y las entregas 📬 a la izquierda, en los mismos renglones;
 - **el evento en curso de cualquier calendario**, al final de la columna derecha, con una barra del color
@@ -34,6 +35,10 @@ cuando hace falta:
   color, start, end }] }`; sin él, simplemente no aparece;
 - **✍️ el bloque de trabajo en curso** (los eventos con hora que empiezan por ✍️ avisan al arrancar y
   llevan una barra con el tiempo hecho, el total y cuánto queda).
+
+El calendario se lee cada 10 minutos **solo mientras escribes**: tras `pausaMinutos` (30 por defecto) sin
+mensajes se detiene, y el siguiente mensaje lo vuelve a leer. Así no quedan llamadas colgadas con el
+equipo dormido.
 
 **`/notas`** muestra la tabla de `NOTAS.md` por materia: lo que lleva, el máximo al que todavía puede
 llegar (⚠️ si ya no alcanza la meta) y cuánto falta para la meta del promedio.
