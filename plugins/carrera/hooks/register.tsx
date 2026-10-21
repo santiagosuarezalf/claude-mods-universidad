@@ -29,6 +29,8 @@ const CADA_MINUTO_MS = 60_000
 const ROTAR_MS = 5000
 const REINTENTO_MS = 60_000
 const ESPERA_INICIAL_MS = 5000
+/** Tras un fallo de gcal-extended, cuánto se espera antes de volver a consultarlo. */
+const PAUSA_AGENDA_MS = 30 * 60_000
 /**
  * Columnas del pie que no son del renglón de carrera: la etiqueta del modo a la izquierda
  * («⏸ plan mode on · », 17) y sub-meter a la derecha (con «week», ~32), más holgura.
@@ -158,11 +160,26 @@ async function leerCalendario ($: EngineInterface, nombre: string) {
   await aplicar($, eventos)
 }
 
-/** Los eventos con hora de las próximas horas en todos los calendarios. Si el conector falla, se deja lo que había. */
+/**
+ * Los eventos con hora de las próximas horas en todos los calendarios. Si el conector falla, se deja lo que había
+ * y no se vuelve a preguntar en media hora: un permiso vencido (`invalid_grant`) no se arregla solo.
+ */
 async function leerTodos ($: EngineInterface) {
-  const r = await $.mcp.call(AGENDA, 'list_timed_events', { hoursBack: 12, hoursAhead: 12 })
-  if (r.isError) return
-  await update($, agenda, () => leerAgenda(r))
+  const ahora = await $.clock.now()
+  if (leyendoAgenda || ahora < agendaPausadaHasta) return
+  leyendoAgenda = true
+  try {
+    const r = await $.mcp.call(AGENDA, 'list_timed_events', { hoursBack: 12, hoursAhead: 12 })
+    const colgado = r.content.some(c =>
+      /moved to the background|is still running|Error:/.test(String((c as { text?: unknown }).text ?? '')))
+    if (r.isError || colgado) {
+      agendaPausadaHasta = (await $.clock.now()) + PAUSA_AGENDA_MS
+      return
+    }
+    await update($, agenda, () => leerAgenda(r))
+  } finally {
+    leyendoAgenda = false
+  }
 }
 
 async function aplicar ($: EngineInterface, eventos: ReturnType<typeof leerEventos>) {
@@ -192,6 +209,10 @@ const avisados = new Set<string>()
 let pausaMs = 30 * 60_000
 let ultimaActividad = 0
 let ultimaConsulta = -Infinity
+/** Nunca dos lecturas a la vez del mismo calendario: si una se cuelga, las siguientes no se apilan detrás. */
+let leyendoCalendario = false
+let leyendoAgenda = false
+let agendaPausadaHasta = 0
 
 /**
  * Si Santiago escribió hace poco. Con el Mac dormido o la sesión olvidada no se consulta el calendario:
@@ -204,7 +225,10 @@ async function activo ($: EngineInterface) {
 /** Lee los dos calendarios y anota cuándo, para no repetir la lectura en el siguiente mensaje. */
 async function refrescar ($: EngineInterface) {
   ultimaConsulta = await $.clock.now()
-  void leerCalendario($, nombreCal).catch(() => undefined)
+  if (!leyendoCalendario) {
+    leyendoCalendario = true
+    void leerCalendario($, nombreCal).catch(() => undefined).finally(() => { leyendoCalendario = false })
+  }
   void leerTodos($).catch(() => undefined)
 }
 

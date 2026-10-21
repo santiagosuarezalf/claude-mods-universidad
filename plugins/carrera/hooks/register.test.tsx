@@ -343,3 +343,23 @@ test('un mensaje con el calendario recién leído no lo vuelve a leer', async ($
   await m.clock.advance(100)
   expect(m.llamadas.length).toBe(antes)
 })
+
+test('si gcal-extended falla, no se vuelve a consultar en media hora (las llamadas no se apilan)', async ($, on) => {
+  const m = mundo(on) // sin agenda: list_timed_events responde con error
+  const agendas = () => m.llamadas.filter(t => t === 'list_timed_events').length
+  await abrir($)
+  await m.clock.advance(6000)
+  expect(agendas()).toBe(1)
+  // Escribiendo cada 10 min, el calendario University se sigue leyendo, pero la agenda espera
+  for (let i = 0; i < 2; i++) {
+    await m.clock.advance(10 * 60_000)
+    await $.prompt.submit({ text: 'sigo aquí' } as never)
+    await m.clock.advance(100)
+  }
+  expect(agendas()).toBe(1)
+  // Pasada la media hora, la siguiente lectura (la de los 40 min) vuelve a intentar
+  await m.clock.advance(10 * 60_000)
+  await $.prompt.submit({ text: 'otra vez' } as never)
+  await m.clock.advance(10 * 60_000)
+  expect(agendas()).toBe(2)
+})
