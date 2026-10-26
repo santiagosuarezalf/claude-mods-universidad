@@ -190,14 +190,22 @@ async function aplicar ($: EngineInterface, eventos: ReturnType<typeof leerEvent
   await avisarCierres($)
 }
 
-/** Una notificación por sesión para cada ventana «🪟» que cierra hoy sin ✅. */
+/** Una notificación por sesión para cada ventana «🪟» que cierra hoy sin ✅, y para cada evaluación de hoy. */
 async function avisarCierres ($: EngineInterface) {
   const ahora = await $.clock.now()
-  for (const v of ventanas(await read($, entregas), ahora)) {
+  const lista = await read($, entregas)
+  for (const v of ventanas(lista, ahora, DIAS_EVALUACION)) {
     const clave = `cierra:${v.titulo}@${v.cierra}`
     if (v.tipo !== 'cierra' || avisados.has(clave)) continue
     avisados.add(clave)
     $.ui.toast(`🔴 HOY cierra ${recortar(v.titulo, 60)} (23:59) · sin ✅`)
+  }
+  // Las evaluaciones ya no pasan por las ventanas: su aviso del día va aparte, una sola vez.
+  for (const x of evaluaciones(lista, ahora, 0)) {
+    const clave = `hoy:${x.titulo}@${x.cierra}`
+    if (avisados.has(clave)) continue
+    avisados.add(clave)
+    $.ui.toast(`📖 HOY: ${recortar(x.titulo, 60)}`)
   }
 }
 
@@ -412,7 +420,7 @@ export const register: Register = (on, options) => {
   })
 
   // Sobre el prompt, solo cuando hace falta: el corte desactualizado, las ventanas «🪟» que toca avisar
-  // (las 3 que cierran primero), los parciales/sustentaciones/exámenes de la semana (📖, en violeta)
+  // (las 3 que cierran primero), los parciales/sustentaciones/exámenes/exposiciones de la semana (📖, en violeta)
   // y el bloque ✍️ en curso.
   // Lo que dibujan otros mods ahí (la English note de ingles, la fila de image-preview) va primero,
   // encima de estos avisos: así el orden no depende de qué mod cargó antes.
@@ -423,7 +431,7 @@ export const register: Register = (on, options) => {
     const c = await read($, ctx)
     const corteMal = c !== null && c.esperado !== null && c.esperado !== c.corte
     const enCurso = (await read($, bloques)).find(x => x.inicio <= ahora && ahora < x.fin)
-    const abiertas = ventanas(await read($, entregas), ahora)
+    const abiertas = ventanas(await read($, entregas), ahora, DIAS_EVALUACION)
     const examenes = evaluaciones(await read($, entregas), ahora, DIAS_EVALUACION)
     const todos = await read($, agenda)
     const actuales = eventosEnCurso(todos, ahora).slice(0, MAX_EN_CURSO)

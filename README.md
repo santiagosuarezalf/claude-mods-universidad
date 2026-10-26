@@ -26,7 +26,10 @@ cuando hace falta:
   (rojo, con notificación). Muestra las 3 que cierran primero y cuenta el resto. El evento sigue siendo
   de un solo día: la ventana va en la descripción. Si no trae esa línea, la ventana arranca el día en que
   se creó el evento;
-- **📖 parciales, sustentaciones y exámenes** de los próximos 7 días, en violeta. Con espacio (≥ 110
+- **📖 parciales, sustentaciones, exámenes y exposiciones** de los próximos 7 días, en violeta, tengan o no
+  «🪟 Abre:» (un quiz o cuestionario sigue siendo entrega aunque diga «parcial»). No se repiten en 📬: de su
+  ventana solo queda el «Abrió hoy» si se asignaron con más de 7 días, y el día de la evaluación llega un
+  aviso `📖 HOY`. Con espacio (≥ 110
   columnas) van en una columna a la derecha y las entregas 📬 a la izquierda, en los mismos renglones;
 - **el evento en curso de cualquier calendario**, al final de la columna derecha, con una barra del color
   de su calendario: `🏋️ Gym  ━━━━━──── 35m de 1h 30m · quedan 55m`. Si no hay nada en curso, el que sigue:

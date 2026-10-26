@@ -117,8 +117,8 @@ export function clasificar (eventos: readonly EventoCal[], ahora: number) {
       if (informativo || /^(✅|❌)/.test(titulo)) continue
       const cierra = finDelDia(sumarDias(finExclusivo, -1))
       // Sin «🪟 Abre:», la ventana arranca el día en que se creó el evento (cuando se supo de la entrega).
-      // Los parciales, sustentaciones y exámenes no llevan ventana: van en su propia lista.
-      const creado = ev.created && !EVALUACION.test(titulo) ? fechaLocal(Date.parse(ev.created)) : undefined
+      // Las evaluaciones no toman la fecha de creación: van en su propia lista.
+      const creado = ev.created && !esEvaluacion(titulo) ? fechaLocal(Date.parse(ev.created)) : undefined
       const abreTxt = /🪟\s*Abre:\s*(\d{4}-\d{2}-\d{2})/.exec(ev.description ?? '')?.[1] ?? creado
       const abre = abreTxt ? inicioDelDia(abreTxt) : null
       if (cierra > ahora) entregas.push({ titulo, cierra, abre })
@@ -143,8 +143,12 @@ export function clasificar (eventos: readonly EventoCal[], ahora: number) {
  * - `abrio`: hoy es el día que abre;
  * - `sigue`: ya pasó la mitad de la ventana y sigue sin ✅ (las marcadas ✅ ni llegan acá).
  * Antes de la mitad, y antes de que abra, no se avisa.
+ *
+ * Las evaluaciones (ver `esEvaluacion`) van en su propia lista aunque traigan «🪟 Abre:»: de su ventana solo
+ * queda el aviso del día en que se asignó, y únicamente si todavía no entran en los `diasEvaluacion` de la
+ * lista 📖, para que nunca salgan dos veces.
  */
-export function ventanas (entregas: readonly Entrega[], ahora: number): Ventana[] {
+export function ventanas (entregas: readonly Entrega[], ahora: number, diasEvaluacion = 7): Ventana[] {
   const hoy = fechaLocal(ahora)
   const lista: Ventana[] = []
   for (const e of entregas) {
@@ -153,20 +157,28 @@ export function ventanas (entregas: readonly Entrega[], ahora: number): Ventana[
       : fechaLocal(e.abre) === hoy ? 'abrio'
         : ahora >= e.abre + (e.cierra - e.abre) / 2 ? 'sigue'
           : null
-    if (tipo) lista.push({ titulo: e.titulo, cierra: e.cierra, tipo })
+    if (!tipo) continue
+    if (esEvaluacion(e.titulo) && (tipo !== 'abrio' || diasHasta(e.cierra, ahora) <= diasEvaluacion)) continue
+    lista.push({ titulo: e.titulo, cierra: e.cierra, tipo })
   }
   return lista.sort((a, b) => a.cierra - b.cierra)
 }
 
-const EVALUACION = /\b(parcial|sustentaci[oó]n|examen)/i
+const EVALUACION = /\b(parcial|sustentaci[oó]n|examen|exposici[oó]n)/i
 
 /**
- * Parciales, sustentaciones y exámenes sin ✅ de los próximos `dias` días (hoy incluido), del más cercano
- * al último. Van aparte de las ventanas: por convención no traen «🪟 Abre:».
+ * Lo que se presenta en persona (parciales, sustentaciones, exámenes, exposiciones). Un quiz o cuestionario
+ * del AVA se hace dentro de su ventana aunque diga «parcial», así que sigue siendo una entrega.
+ */
+export const esEvaluacion = (titulo: string) => EVALUACION.test(titulo) && !/\b(quiz|cuestionario)/i.test(titulo)
+
+/**
+ * Evaluaciones sin ✅ de los próximos `dias` días (hoy incluido), del más cercano al último, tengan o no
+ * «🪟 Abre:». Van aparte de las ventanas, que ya no las repiten.
  */
 export function evaluaciones (entregas: readonly Entrega[], ahora: number, dias = 7): Entrega[] {
   return entregas
-    .filter(e => e.abre === null && e.cierra > ahora && EVALUACION.test(e.titulo) && diasHasta(e.cierra, ahora) <= dias)
+    .filter(e => e.cierra > ahora && esEvaluacion(e.titulo) && diasHasta(e.cierra, ahora) <= dias)
     .sort((a, b) => a.cierra - b.cierra)
 }
 

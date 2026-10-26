@@ -111,6 +111,28 @@ describe('evaluaciones', () => {
     ], AHORA)
     expect(lista.map(x => x.titulo)).toEqual(['PARCIAL Corte II — Teoría de la Computación', 'Sustentación proyecto'])
   })
+
+  test('exposiciones y sustentaciones con «🪟 Abre:» van a la lista 📖 y no se repiten en las ventanas', async () => {
+    const en = (f: string, h = '12:00') => Date.parse(`${f}T${h}:00-05:00`)
+    const dia = (f: string) => Date.parse(`${f}T00:00:00-05:00`)
+    // Los casos reales del 26 oct 2026
+    const expo = { titulo: 'Exposición Propiedades de las Expresiones Regulares — Teoría', abre: dia('2026-10-21'), cierra: cierre('2026-10-26') }
+    const naval = { titulo: 'Entrega y sustentación Batalla Naval — DPOO', abre: dia('2026-10-20'), cierra: cierre('2026-10-26') }
+    const quiz = { titulo: 'Quiz parcial U3', abre: dia('2026-10-20'), cierra: cierre('2026-10-26') }
+    for (const h of ['2026-10-24', '2026-10-26']) {
+      expect(evaluaciones([expo, naval, quiz], en(h)).map(x => x.titulo)).toEqual([expo.titulo, naval.titulo])
+      expect(ventanas([expo, naval, quiz], en(h)).map(x => x.titulo)).toEqual(['Quiz parcial U3'])
+    }
+    // El día que se asigna, si ya está a 7 días o menos, solo sale en 📖
+    expect(ventanas([expo], en('2026-10-21'))).toEqual([])
+    expect(evaluaciones([expo], en('2026-10-21')).length).toBe(1)
+    // Asignada con más de 7 días: ese día solo el aviso 📬 «Abrió hoy»; ya dentro de los 7, solo 📖
+    const lejana = { titulo: 'Exposición plan lector', abre: dia('2026-09-03'), cierra: cierre('2026-10-29') }
+    expect(ventanas([lejana], en('2026-09-03')).map(v => v.tipo)).toEqual(['abrio'])
+    expect(evaluaciones([lejana], en('2026-09-03'))).toEqual([])
+    expect(ventanas([lejana], en('2026-10-25'))).toEqual([])
+    expect(evaluaciones([lejana], en('2026-10-25')).length).toBe(1)
+  })
 })
 
 describe('cuantoFalta', () => {
