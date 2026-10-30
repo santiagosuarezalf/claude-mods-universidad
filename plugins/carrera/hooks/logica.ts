@@ -356,12 +356,19 @@ export function fraccionPara (m: Meta, umbral: number) {
   return m.quedan > 0 ? necesita / m.quedan : Infinity
 }
 
-/** La frase corta de cada escalón: «50 %: el 61 %», «25 % ✓» o «100 % ✗». */
+/** La nota promedio por materia que pide `umbral` en lo que queda, redondeada hacia arriba: 37,9 → «37,9/40». */
+function notaPara (m: Meta, umbral: number) {
+  const sobre = m.quedan / m.pesos
+  return { nota: Math.ceil(fraccionPara(m, umbral) * sobre * 10 - 1e-9) / 10, sobre }
+}
+
+/** La frase corta de cada escalón: «50 % → 37,9/40», «25 % ✓» o «100 % no alcanza». */
 function escalonCorto (m: Meta, e: Escalon) {
   const f = fraccionPara(m, e.umbral)
   if (f <= 0) return `${e.pct} % ✓`
-  if (f > 1 + 1e-9) return `${e.pct} % ✗`
-  return `${e.pct} %: el ${Math.ceil(f * 100)} %`
+  if (f > 1 + 1e-9) return `${e.pct} % no alcanza`
+  const { nota, sobre } = notaPara(m, e.umbral)
+  return `${e.pct} % → ${coma(nota, 1)}/${Math.round(sobre)}`
 }
 
 /** El escalón más alto al que todavía se puede llegar sacando todo lo que queda. */
@@ -369,11 +376,15 @@ export function techo (m: Meta) {
   return [...m.escalones].reverse().find(e => fraccionPara(m, e.umbral) <= 1 + 1e-9) ?? null
 }
 
-/** La frase del pie con escalones: cuánto de lo que queda pide cada uno y hasta cuál se alcanza. */
+/** «39,2/40 · puedes perder 0,8 por materia»: la nota que pide el escalón y el margen que deja. */
+function escalonLargo (m: Meta, umbral: number) {
+  const { nota, sobre } = notaPara(m, umbral)
+  return `${coma(nota, 1)}/${Math.round(sobre)} · puedes perder ${coma(Math.max(0, sobre - nota), 1)} por materia`
+}
+
+/** La frase del pie con escalones: qué promedio por materia pide cada uno en lo que queda. */
 export function fraseEscalones (m: Meta) {
-  const t = techo(m)
-  const alcance = t ? `alcanza hasta el ${t.pct} %` : 'ningún escalón se alcanza'
-  return `🎯 Necesitas de lo que queda → ${m.escalones.map(e => escalonCorto(m, e)).join(' · ')} · máx. ${coma(m.maximo)}, ${alcance}`
+  return `🎯 Promedio por materia en lo que queda: ${m.escalones.map(e => escalonCorto(m, e)).join(' · ')} · máx. ${coma(m.maximo)}`
 }
 
 /** 9.3 → «9,30»: con coma decimal, como se escriben las notas. */
@@ -416,14 +427,14 @@ export function tablaNotas (m: Meta, b: Beca | null, meta: number) {
   }
   lineas.push('', fraseMeta(m, meta).replace(' · máximo posible', '.\n   Máximo posible si sacas todo perfecto:') + '.')
   if (m.escalones.length > 0) {
-    lineas.push('', '🪜 Escalones de beca (umbral estimado · cuánto necesitas de lo que queda):')
+    lineas.push('', '🪜 Escalones de beca (umbral estimado · promedio por materia que pide en lo que queda):')
     for (const e of [...m.escalones].reverse()) {
       const f = fraccionPara(m, e.umbral)
       const estado = f <= 0
         ? '✅ ya asegurado'
         : f > 1 + 1e-9
           ? `❌ ya no se alcanza (máx. ${coma(m.maximo)})`
-          : `el ${Math.ceil(f * 100)} %`
+          : escalonLargo(m, e.umbral)
       lineas.push(`   ${`${e.pct} %`.padStart(5)}  ${coma(e.umbral)}  →  ${estado}`)
     }
   }

@@ -17,8 +17,8 @@ Un renglón en el pie, junto a la etiqueta del modo de permisos, que cambia cada
 - **🎯 Cuánto falta para la meta:** `🎯 Para 9,3: necesitas 446 de los 460 puntos que quedan (97 %) ·
   máximo posible 9,50`. Cada materia vale 100 puntos (30 + 30 + 40); con créditos en todas, va ponderado.
 - **🪜 Con escalones de beca** (opcional, ver abajo), 🎓 muestra cada umbral en verde (ya lo pasas), amarillo
-  (todavía se alcanza) o rojo (ya no), y 🎯 dice qué parte de lo que queda pide cada uno:
-  `🎯 Necesitas de lo que queda → 25 %: el 93 % · 50 %: el 95 % · 75 %: el 98 % · 100 % ✗ · máx. 9,33, alcanza hasta el 75 %`.
+  (todavía se alcanza) o rojo (ya no), y 🎯 dice qué promedio por materia pide cada uno en lo que queda:
+  `🎯 Promedio por materia en lo que queda: 25 % → 36,9/40 · 50 % → 37,9/40 · 75 % → 39,2/40 · 100 % no alcanza · máx. 9,33`.
 
 El renglón tiene ancho fijo para no empujar lo que haya a la derecha del pie. Sobre el prompt, solo
 cuando hace falta:
@@ -48,7 +48,7 @@ equipo dormido.
 
 **`/notas`** muestra la tabla de `NOTAS.md` por materia: lo que lleva, el máximo al que todavía puede
 llegar (⚠️ si ya no alcanza la meta) y cuánto falta para la meta del promedio. Con escalones, agrega un
-bloque 🪜 con cada umbral y el porcentaje de lo que queda que necesitas para llegar a él.
+bloque 🪜 con cada umbral, la nota promedio por materia que pide y cuánto puedes perder.
 
 Necesita el conector de **Google Calendar** de claude.ai conectado en Claude Code.
 

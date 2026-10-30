@@ -275,10 +275,10 @@ describe('escalones de beca', () => {
     expect(m.escalones.length).toBe(4)
     expect(Math.abs(fraccionPara(m, 9.02) - (451 - 274) / 200) < 1e-9).toBe(true)
     expect(techo(m)?.pct).toBe(100)
-    expect(fraseEscalones(m)).toBe('🎯 Necesitas de lo que queda → 25 %: el 89 % · 50 %: el 91 % · 75 %: el 95 % · 100 %: el 100 % · máx. 9,48, alcanza hasta el 100 %')
+    expect(fraseEscalones(m)).toBe('🎯 Promedio por materia en lo que queda: 25 % → 35,4/40 · 50 % → 36,4/40 · 75 % → 37,7/40 · 100 % → 39,7/40 · máx. 9,48')
     const t = tablaNotas(m, beca(md), 9.3)
     expect(t).toContain('🪜 Escalones de beca')
-    expect(t).toContain('  100 %  9,45  →  el 100 %')
+    expect(t).toContain('  100 %  9,45  →  39,7/40 · puedes perder 0,3 por materia')
   })
 
   test('sin línea de escalones, /notas queda como antes', () => {
