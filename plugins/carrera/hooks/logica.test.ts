@@ -11,6 +11,7 @@ describe('clasificar', () => {
       { summary: 'Semana 11', start: { date: '2026-10-12T00:00:00Z' }, end: { date: '2026-10-19T00:00:00Z' }, transparency: 'transparent' },
       { summary: 'Entrega proyecto final', start: { date: '2026-10-19T00:00:00Z' }, end: { date: '2026-10-20T00:00:00Z' } },
       { summary: '✅ Taller entregado', start: { date: '2026-10-19T00:00:00Z' }, end: { date: '2026-10-20T00:00:00Z' } },
+      { summary: '⏭️ Exposición que el profe no pidió', start: { date: '2026-10-19T00:00:00Z' }, end: { date: '2026-10-20T00:00:00Z' } },
       { summary: '✍️ Hacer: proyecto', start: { dateTime: '2026-10-18T13:00:00-05:00' }, end: { dateTime: '2026-10-18T18:00:00-05:00' } },
       { summary: 'Clase de la materia', start: { dateTime: '2026-10-20T18:00:00-05:00' }, end: { dateTime: '2026-10-20T20:00:00-05:00' } },
     ], AHORA)

@@ -91,7 +91,8 @@ export function leerEventos (resultado: { content?: readonly unknown[]; structur
 
 /**
  * Separa lo que le sirve al mod:
- * - entregas: eventos de día completo que no están marcados ✅/❌ ni son informativos (Semana N, libres);
+ * - entregas: eventos de día completo que no están marcados ✅/❌/⏭️ ni son informativos (Semana N, libres);
+ *   ⏭️ = no se hizo porque el profe la canceló o se la saltó (no es culpa de Santiago);
  * - bloques: eventos con hora que empiezan por ✍️;
  * - semana: el número del evento «Semana N» que cubre hoy.
  */
@@ -114,7 +115,7 @@ export function clasificar (eventos: readonly EventoCal[], ahora: number) {
         continue
       }
       const informativo = ev.transparency === 'transparent' || ev.availability === 'AVAILABILITY_FREE'
-      if (informativo || /^(✅|❌)/.test(titulo)) continue
+      if (informativo || /^(✅|❌|⏭)/.test(titulo)) continue
       const cierra = finDelDia(sumarDias(finExclusivo, -1))
       // Sin «🪟 Abre:», la ventana arranca el día en que se creó el evento (cuando se supo de la entrega).
       // Las evaluaciones no toman la fecha de creación: van en su propia lista.
