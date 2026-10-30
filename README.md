@@ -16,6 +16,9 @@ Un renglón en el pie, junto a la etiqueta del modo de permisos, que cambia cada
   `🎓 Promedio aprox. 8,69 · meta de beca 9,3 (faltan 0,61) · calculado con 7 de 7 materias`.
 - **🎯 Cuánto falta para la meta:** `🎯 Para 9,3: necesitas 446 de los 460 puntos que quedan (97 %) ·
   máximo posible 9,50`. Cada materia vale 100 puntos (30 + 30 + 40); con créditos en todas, va ponderado.
+- **🪜 Con escalones de beca** (opcional, ver abajo), 🎓 muestra cada umbral en verde (ya lo pasas), amarillo
+  (todavía se alcanza) o rojo (ya no), y 🎯 dice qué parte de lo que queda pide cada uno:
+  `🎯 Necesitas de lo que queda → 25 %: el 93 % · 50 %: el 95 % · 75 %: el 98 % · 100 % ✗ · máx. 9,33, alcanza hasta el 75 %`.
 
 El renglón tiene ancho fijo para no empujar lo que haya a la derecha del pie. Sobre el prompt, solo
 cuando hace falta:
@@ -44,7 +47,8 @@ mensajes se detiene, y el siguiente mensaje lo vuelve a leer. Así no quedan lla
 equipo dormido.
 
 **`/notas`** muestra la tabla de `NOTAS.md` por materia: lo que lleva, el máximo al que todavía puede
-llegar (⚠️ si ya no alcanza la meta) y cuánto falta para la meta del promedio.
+llegar (⚠️ si ya no alcanza la meta) y cuánto falta para la meta del promedio. Con escalones, agrega un
+bloque 🪜 con cada umbral y el porcentaje de lo que queda que necesitas para llegar a él.
 
 Necesita el conector de **Google Calendar** de claude.ai conectado en Claude Code.
 
@@ -132,6 +136,15 @@ Responde `y` para agregar el marketplace y elige el alcance (usuario). Las opcio
 En `NOTAS.md`, cada celda es un número (puntos sobre lo que vale el corte), `x/y` (lo obtenido sobre lo
 evaluado hasta ahora) o vacía. Si a alguna materia le faltan créditos, el promedio sale sin ponderar y se
 marca con `≈`.
+
+Si la beca tiene varios escalones, agrega en `NOTAS.md` una línea que diga «Escalones» con pares
+«porcentaje umbral», en cualquier orden:
+
+```
+> **Escalones de beca:** 25 % 9,02 · 50 % 9,12 · 75 % 9,25 · 100 % 9,45
+```
+
+Sin esa línea, el medidor usa solo `metaPromedio`.
 
 ## Desarrollo
 

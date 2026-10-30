@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { beca, clasificar, enCurso, iconoCalendario, leerAgenda, contexto, cuantoFalta, evaluaciones, fechaCorta, fraseMeta, restante, tablaNotas, ventanas } from './logica'
+import { beca, clasificar, enCurso, escalones, fraccionPara, fraseEscalones, iconoCalendario, leerAgenda, contexto, cuantoFalta, evaluaciones, fechaCorta, fraseMeta, restante, tablaNotas, techo, ventanas } from './logica'
 
 const AHORA = Date.parse('2026-10-18T15:00:00-05:00') // un domingo a las 3 p. m., UTC−5
 
@@ -251,4 +251,38 @@ test('leerAgenda lee la respuesta de gcal-extended y descarta fechas rotas', () 
   expect(ev[0].color).toBe('#fd7941')
   expect(iconoCalendario('Gym')).toBe('🏋️')
   expect(iconoCalendario('Otro')).toBe('⏱️')
+})
+
+describe('escalones de beca', () => {
+  const md = [
+    '> **Escalones de beca (estimado):** 25 % 9,02 · 50 % 9,12 · 75 % 9,25 · 100 % 9,45',
+    '| Materia | Créditos | Corte I (/30) | Corte II (/30) | Corte III (/40) |',
+    '|---|---|---|---|---|',
+    '| A | 3 | 28 | 30 | |',
+    '| B | 2 | 25 | 25 | |',
+  ].join('\n')
+
+  test('lee la línea y los ordena del más bajo al más alto', () => {
+    expect(escalones(md)).toEqual([
+      { pct: 25, umbral: 9.02 }, { pct: 50, umbral: 9.12 }, { pct: 75, umbral: 9.25 }, { pct: 100, umbral: 9.45 },
+    ])
+    expect(escalones('sin nada')).toEqual([])
+  })
+
+  test('cuánto pide cada uno y hasta cuál se alcanza', () => {
+    // obtenido = 58·3 + 50·2 = 274 · quedan = 40·5 = 200 · pesos = 5 → máx. 9,48
+    const m = cuantoFalta(md, 9.3)!
+    expect(m.escalones.length).toBe(4)
+    expect(Math.abs(fraccionPara(m, 9.02) - (451 - 274) / 200) < 1e-9).toBe(true)
+    expect(techo(m)?.pct).toBe(100)
+    expect(fraseEscalones(m)).toBe('🎯 Necesitas de lo que queda → 25 %: el 89 % · 50 %: el 91 % · 75 %: el 95 % · 100 %: el 100 % · máx. 9,48, alcanza hasta el 100 %')
+    const t = tablaNotas(m, beca(md), 9.3)
+    expect(t).toContain('🪜 Escalones de beca')
+    expect(t).toContain('  100 %  9,45  →  el 100 %')
+  })
+
+  test('sin línea de escalones, /notas queda como antes', () => {
+    const m = cuantoFalta(md.split('\n').slice(1).join('\n'), 9.3)!
+    expect(tablaNotas(m, null, 9.3)).not.toContain('🪜')
+  })
 })

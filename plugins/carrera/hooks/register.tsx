@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Beca, Bloque, Contexto, Entrega, Evento, Meta } from '../types'
 import { barra, enCurso as eventosEnCurso, horaLocal, iconoCalendario, leerAgenda, proximo,
-  beca, clasificar, coma, contexto, cuantoFalta, diasHasta, evaluaciones, fechaCorta, fechaLocal, fraseMeta, leerEventos, punteros, recortar, restante,
+  beca, clasificar, coma, contexto, cuantoFalta, diasHasta, evaluaciones, fechaCorta, fechaLocal, fraseEscalones, fraseMeta, leerEventos, punteros, recortar, restante,
   tablaNotas, usarZona, ventanas,
 } from './logica'
 
@@ -362,23 +362,44 @@ export const register: Register = (on, options) => {
       )
     }
 
+    const m = await read($, falta)
+    const conEscalones = m !== null && m.escalones.length > 0
+    // Cada escalón en verde si el promedio ya lo pasa, amarillo si todavía se alcanza y rojo si ya no.
+    const colorEscalon = (umbral: number) =>
+      b !== null && b.promedio !== null && b.promedio >= umbral ? 'success' : m !== null && m.maximo >= umbral ? 'warning' : 'error'
     const promedio = b !== null && b.promedio !== null
       ? (
         <Text>
           <Text dimColor>🎓 Promedio {b.aproximado ? 'aprox. ' : ''}</Text>
-          <Text color={b.promedio >= meta ? 'success' : 'warning'}>{coma(b.promedio)}</Text>
-          <Text dimColor> · meta de beca {coma(meta, 1)}</Text>
-          {b.promedio >= meta
-            ? <Text color="success"> (por encima ✓)</Text>
-            : <Text dimColor> (faltan {coma(meta - b.promedio)})</Text>}
-          <Text dimColor> · calculado con {b.materias} de {b.total} materias</Text>
+          {conEscalones
+            ? (
+              <Text>
+                <Text>{coma(b.promedio)}</Text>
+                <Text dimColor> · escalones </Text>
+                {m.escalones.map((x, i) => (
+                  <Text key={x.pct}>
+                    {i > 0 ? <Text dimColor> · </Text> : null}
+                    <Text color={colorEscalon(x.umbral)}>{x.pct} % {coma(x.umbral)}</Text>
+                  </Text>
+                ))}
+              </Text>
+              )
+            : (
+              <Text>
+                <Text color={b.promedio >= meta ? 'success' : 'warning'}>{coma(b.promedio)}</Text>
+                <Text dimColor> · meta de beca {coma(meta, 1)}</Text>
+                {b.promedio >= meta
+                  ? <Text color="success"> (por encima ✓)</Text>
+                  : <Text dimColor> (faltan {coma(meta - b.promedio)})</Text>}
+                <Text dimColor> · calculado con {b.materias} de {b.total} materias</Text>
+              </Text>
+              )}
         </Text>
         )
       : null
 
-    const m = await read($, falta)
     const objetivo = m !== null && b !== null && b.promedio !== null
-      ? <Text dimColor>{fraseMeta(m, meta)}</Text>
+      ? <Text dimColor>{conEscalones ? fraseEscalones(m) : fraseMeta(m, meta)}</Text>
       : null
 
     const piezas = [entrega, semestre, promedio, objetivo].filter(x => x !== null)

@@ -14,7 +14,14 @@ export type Meta = {
   quedan: number
   maximo: number
   ponderado: boolean
+  /** Lo ya ganado y la suma de los pesos, para calcular cuánto falta para cualquier otro umbral. */
+  obtenido: number
+  pesos: number
+  /** Los escalones de beca de la línea «Escalones» de NOTAS.md, del más bajo al más alto. Vacío si no hay. */
+  escalones: Escalon[]
 }
+/** Un escalón de beca: el porcentaje que da y el promedio estimado que hace falta. */
+export type Escalon = { pct: number; umbral: number }
 export type Bloque = { titulo: string; inicio: number; fin: number }
 /** Un evento con hora de cualquier calendario, con el color con que Google Calendar lo pinta. */
 export type Evento = { titulo: string; calendario: string; color: string | null; inicio: number; fin: number }

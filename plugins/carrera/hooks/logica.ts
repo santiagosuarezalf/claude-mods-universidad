@@ -1,5 +1,5 @@
 // Lógica pura del mod: leer el calendario, la tabla de cortes y las notas. Sin `$`, para poder probarla.
-import type { Evento, Beca, Bloque, Contexto, Entrega, MateriaNota, Meta, Ventana } from '../types'
+import type { Evento, Beca, Bloque, Contexto, Entrega, Escalon, MateriaNota, Meta, Ventana } from '../types'
 
 let desfaseHoras = -5 // UTC−5 por defecto; el mod lo ajusta con la opción `utcOffset`
 
@@ -329,7 +329,51 @@ export function cuantoFalta (md: string, meta: number): Meta | null {
     quedan,
     maximo: (obtenido + quedan) / (10 * pesos),
     ponderado,
+    obtenido,
+    pesos,
+    escalones: escalones(md),
   }
+}
+
+/**
+ * Los escalones de beca de NOTAS.md, de una línea que diga «Escalones» y traiga pares «porcentaje umbral»,
+ * p. ej. `> Escalones: 25 % 9,02 · 50 % 9,12 · 75 % 9,25 · 100 % 9,45`. Ordenados del más bajo al más alto.
+ */
+export function escalones (md: string): Escalon[] {
+  const linea = md.split('\n').find(f => /escalones/i.test(f) && /\d+\s*%\s*:?\s*\d+[.,]\d+/.test(f))
+  if (!linea) return []
+  const lista: Escalon[] = []
+  for (const [, pct, umbral] of linea.matchAll(/(\d+)\s*%\s*:?\s*(\d+[.,]\d+)/g)) {
+    lista.push({ pct: Number(pct), umbral: Number(umbral.replace(',', '.')) })
+  }
+  return lista.sort((a, b) => a.umbral - b.umbral)
+}
+
+/** Qué parte de lo que queda hace falta para llegar a `umbral`: 0 si ya está, más de 1 si ya no se alcanza. */
+export function fraccionPara (m: Meta, umbral: number) {
+  const necesita = umbral * 10 * m.pesos - m.obtenido
+  if (necesita <= 0) return 0
+  return m.quedan > 0 ? necesita / m.quedan : Infinity
+}
+
+/** La frase corta de cada escalón: «50 %: el 61 %», «25 % ✓» o «100 % ✗». */
+function escalonCorto (m: Meta, e: Escalon) {
+  const f = fraccionPara(m, e.umbral)
+  if (f <= 0) return `${e.pct} % ✓`
+  if (f > 1 + 1e-9) return `${e.pct} % ✗`
+  return `${e.pct} %: el ${Math.ceil(f * 100)} %`
+}
+
+/** El escalón más alto al que todavía se puede llegar sacando todo lo que queda. */
+export function techo (m: Meta) {
+  return [...m.escalones].reverse().find(e => fraccionPara(m, e.umbral) <= 1 + 1e-9) ?? null
+}
+
+/** La frase del pie con escalones: cuánto de lo que queda pide cada uno y hasta cuál se alcanza. */
+export function fraseEscalones (m: Meta) {
+  const t = techo(m)
+  const alcance = t ? `alcanza hasta el ${t.pct} %` : 'ningún escalón se alcanza'
+  return `🎯 Necesitas de lo que queda → ${m.escalones.map(e => escalonCorto(m, e)).join(' · ')} · máx. ${coma(m.maximo)}, ${alcance}`
 }
 
 /** 9.3 → «9,30»: con coma decimal, como se escriben las notas. */
@@ -371,6 +415,18 @@ export function tablaNotas (m: Meta, b: Beca | null, meta: number) {
     )
   }
   lineas.push('', fraseMeta(m, meta).replace(' · máximo posible', '.\n   Máximo posible si sacas todo perfecto:') + '.')
+  if (m.escalones.length > 0) {
+    lineas.push('', '🪜 Escalones de beca (umbral estimado · cuánto necesitas de lo que queda):')
+    for (const e of [...m.escalones].reverse()) {
+      const f = fraccionPara(m, e.umbral)
+      const estado = f <= 0
+        ? '✅ ya asegurado'
+        : f > 1 + 1e-9
+          ? `❌ ya no se alcanza (máx. ${coma(m.maximo)})`
+          : `el ${Math.ceil(f * 100)} %`
+      lineas.push(`   ${`${e.pct} %`.padStart(5)}  ${coma(e.umbral)}  →  ${estado}`)
+    }
+  }
   if (!m.ponderado) lineas.push('   ≈ Sin ponderar: faltan los créditos de cada materia en NOTAS.md.')
   return lineas.join('\n')
 }
